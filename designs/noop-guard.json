@@ -1,0 +1,53 @@
+{
+  "designId": "noop-guard",
+  "parameters": {},
+  "_why": "回归：轮廓完全落在已有材料里，必须报 FEATURE_CHANGED_NOTHING，而不是静默成功。",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "base_outline",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            0,
+            0
+          ],
+          "width": 100,
+          "height": 60
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "base",
+      "profile": "base_outline",
+      "depth": 10,
+      "direction": "+Y"
+    },
+    {
+      "kind": "sketch",
+      "id": "inner_outline",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            0,
+            0
+          ],
+          "width": 20,
+          "height": 20
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "inner",
+      "profile": "inner_outline",
+      "depth": 5,
+      "direction": "+Y"
+    }
+  ]
+}

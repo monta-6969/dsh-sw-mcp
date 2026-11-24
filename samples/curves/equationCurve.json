@@ -1,0 +1,12 @@
+{
+  "kind": "equationCurve",
+  "id": "cam-law",
+  "construction": false,
+  "params": {
+    "variable": { "name": "t", "from": 0, "to": 6.283185307 },
+    "x": "20*cos(t)+4*cos(5*t)",
+    "y": "20*sin(t)+4*sin(5*t)",
+    "samples": 128
+  },
+  "source": "spec"
+}

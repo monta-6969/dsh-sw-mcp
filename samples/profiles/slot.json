@@ -1,0 +1,12 @@
+{
+  "shape": "slot",
+  "center": [40, 20],
+  "length": 40,
+  "width": 12,
+  "angle": 0,
+  "bind": {
+    "center": "slot.center",
+    "length": "slot.length",
+    "width": "slot.width"
+  }
+}

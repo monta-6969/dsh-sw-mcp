@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sw-mcp.local/contracts/capabilities.schema.json",
+  "title": "sw-mcp bridge capability manifest",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 9007199254740991
+    },
+    "protocolVersion": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 9007199254740991
+    },
+    "bridgeVersion": {
+      "type": "string"
+    },
+    "generatedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "ops": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "summary": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "args": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "type": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "required": {
+                  "default": false,
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "type",
+                "required"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "mutates": {
+            "default": false,
+            "type": "boolean"
+          },
+          "requiresDocument": {
+            "default": false,
+            "type": "boolean"
+          },
+          "lockClass": {
+            "default": "write",
+            "type": "string",
+            "enum": [
+              "free",
+              "read",
+              "write"
+            ]
+          },
+          "since": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "summary",
+          "args",
+          "mutates",
+          "requiresDocument",
+          "lockClass"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "protocolVersion",
+    "bridgeVersion",
+    "generatedAt",
+    "ops"
+  ],
+  "additionalProperties": false
+}

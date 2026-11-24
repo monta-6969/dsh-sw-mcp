@@ -1,0 +1,13 @@
+{
+  "kind": "circle",
+  "id": "hole1",
+  "construction": false,
+  "params": {
+    "center": [20, 15],
+    "radius": 4
+  },
+  "dimensions": [
+    { "name": "hole.d", "type": "diameter", "value": 8, "refs": ["hole1"], "driving": true }
+  ],
+  "source": "spec"
+}

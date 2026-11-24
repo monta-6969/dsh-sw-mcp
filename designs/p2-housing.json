@@ -1,0 +1,433 @@
+{
+  "_comment": "p2 轴承座。世界坐标：X 沿 225，Y 向上，Z 沿 110（底板 z 0..110）。第一角法。一个轮廓一张草图：本机 SOLIDWORKS 对同一草图里两个重叠闭合轮廓的拉伸/切除会静默返回 null。",
+  "schemaVersion": 3,
+  "designId": "p2-housing",
+  "units": "mm",
+  "params": {
+    "base.len": 225,
+    "base.wid": 110,
+    "base.thk": 15,
+    "base.corner": 13,
+    "slot.wid": 14,
+    "slot.rectLen": 20,
+    "web.thk": 44,
+    "web.outer": 80,
+    "boss.dia": 75,
+    "boss.len": 100,
+    "bore.dia": 40,
+    "bore.axisY": 60,
+    "key.wid": 12,
+    "key.depth": 4
+  },
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "base_outline",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "roundedRect",
+          "center": [
+            0,
+            -55
+          ],
+          "width": "base.len",
+          "height": "base.wid",
+          "radius": "base.corner"
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "base",
+      "profile": "base_outline",
+      "depth": "base.thk",
+      "direction": "+Y"
+    },
+    {
+      "kind": "sketch",
+      "id": "slot_rect_l",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            -102.5,
+            -55
+          ],
+          "width": "slot.rectLen",
+          "height": "slot.wid"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "slot_rect_l_cut",
+      "profile": "slot_rect_l",
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "kind": "sketch",
+      "id": "slot_arc_l",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            -92.5,
+            -55
+          ],
+          "diameter": "slot.wid"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "slot_arc_l_cut",
+      "profile": "slot_arc_l",
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "kind": "sketch",
+      "id": "slot_rect_r",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            102.5,
+            -55
+          ],
+          "width": "slot.rectLen",
+          "height": "slot.wid"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "slot_rect_r_cut",
+      "profile": "slot_rect_r",
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "kind": "sketch",
+      "id": "slot_arc_r",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            92.5,
+            -55
+          ],
+          "diameter": "slot.wid"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "slot_arc_r_cut",
+      "profile": "slot_arc_r",
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "_why": "支承体一次成形：外轮廓 + R40 拱顶 + 下凹 R40 让它在两条腿上。做成一个闭合轮廓而不是「先合并再加切除」，因为切除边形的下边正好落在底板顶面（两个体的公共面）上，Parasolid 对这种共面边界返回 null。",
+      "kind": "sketch",
+      "id": "web_profile",
+      "plane": 2,
+      "primitives": [
+        {
+          "shape": "path",
+          "start": [
+            -95,
+            15
+          ],
+          "segments": [
+            {
+              "to": [
+                -95,
+                60
+              ]
+            },
+            {
+              "arc": {
+                "to": [
+                  -15,
+                  60
+                ],
+                "center": [
+                  -55,
+                  60
+                ],
+                "dir": -1
+              }
+            },
+            {
+              "to": [
+                -15,
+                15
+              ]
+            },
+            {
+              "to": [
+                -28.5,
+                15
+              ]
+            },
+            {
+              "to": [
+                -28.5,
+                30
+              ]
+            },
+            {
+              "arc": {
+                "to": [
+                  -81.5,
+                  30
+                ],
+                "center": [
+                  -55,
+                  60
+                ],
+                "dir": -1
+              }
+            },
+            {
+              "to": [
+                -81.5,
+                15
+              ]
+            },
+            {
+              "to": [
+                -95,
+                15
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "web",
+      "profile": "web_profile",
+      "depth": "web.thk",
+      "symmetric": true,
+      "direction": "-X"
+    },
+    {
+      "kind": "sketch",
+      "id": "boss_profile",
+      "plane": 2,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            -55,
+            "bore.axisY"
+          ],
+          "diameter": "boss.dia"
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "boss",
+      "profile": "boss_profile",
+      "depth": "boss.len",
+      "symmetric": true,
+      "direction": "-X"
+    },
+    {
+      "kind": "sketch",
+      "id": "bore_profile",
+      "plane": 2,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            -55,
+            "bore.axisY"
+          ],
+          "diameter": "bore.dia"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "bore_cut",
+      "profile": "bore_profile",
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "_why": "键槽在孔的底部：Ø40 孔心 y=60，孔底 y=40，键槽 12 宽 × 4 深正好把孔底再往下开 4（y 36..40）。之前放在 y=18 是因为它在孔腔里切不到料，现在有了 FEATURE_CHANGED_NOTHING 守卫，位置错了会直接报错。",
+      "kind": "sketch",
+      "id": "key_profile",
+      "plane": 2,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            -55,
+            39
+          ],
+          "width": "key.wid",
+          "height": "key.depth"
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "key_cut",
+      "profile": "key_profile",
+      "throughAll": true,
+      "both": true
+    }
+  ],
+  "__expect": {
+    "_why": "体积和包围盒只记不判。下面每一条都对应图纸上的一个标注；量不到就说明那条没建出来。",
+    "checks": [
+      {
+        "name": "板长 225",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minX"
+          },
+          "b": {
+            "plane": "maxX"
+          }
+        },
+        "expect": 225,
+        "tol": 0.05
+      },
+      {
+        "name": "板宽 110",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minZ"
+          },
+          "b": {
+            "plane": "maxZ"
+          }
+        },
+        "expect": 110,
+        "tol": 0.05
+      },
+      {
+        "name": "总高 100（底面到拱顶 R40）",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minY"
+          },
+          "b": {
+            "plane": "maxY"
+          }
+        },
+        "expect": 100,
+        "tol": 0.05
+      },
+      {
+        "name": "主孔轴线到底面 60",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minY"
+          },
+          "b": {
+            "axis": {
+              "diameter": 40
+            }
+          }
+        },
+        "expect": 60,
+        "tol": 0.05
+      },
+      {
+        "name": "主孔 Ø40",
+        "measure": "axis",
+        "args": {
+          "diameter": 40
+        },
+        "pick": "count",
+        "expect": 1,
+        "tol": 0
+      },
+      {
+        "name": "壳体外圆 Ø80（拱顶 + 下凹弧面同半径）",
+        "measure": "axis",
+        "args": {
+          "diameter": 80,
+          "hole": false
+        },
+        "pick": "count",
+        "expect": 2,
+        "tol": 0
+      },
+      {
+        "name": "凸台 Ø75",
+        "measure": "axis",
+        "args": {
+          "diameter": 75,
+          "hole": false
+        },
+        "pick": "count",
+        "expect": 1,
+        "tol": 0
+      },
+      {
+        "name": "两端槽圆心距 185",
+        "measure": "spacing",
+        "args": {
+          "diameter": 14
+        },
+        "pick": "pairs[0].distance",
+        "expect": 185,
+        "tol": 0.05
+      },
+      {
+        "name": "板厚（槽孔长 15）",
+        "measure": "axis",
+        "args": {
+          "diameter": 14
+        },
+        "pick": "matches[0].length",
+        "expect": 15,
+        "tol": 0.2,
+        "allowFirst": true
+      },
+      {
+        "name": "主孔沿 X 贯穿 100",
+        "measure": "axis",
+        "args": {
+          "diameter": 40
+        },
+        "pick": "matches[0].length",
+        "expect": 100,
+        "tol": 0.05
+      },
+      {
+        "name": "板厚 15（四角 R13 圆柱高，不受端槽圆角影响）",
+        "measure": "axis",
+        "args": {
+          "kind": "axis",
+          "diameter": 26,
+          "hole": false
+        },
+        "pick": "matches[0].length",
+        "expect": 15,
+        "tol": 0.05,
+        "allowFirst": true
+      }
+    ]
+  }
+}

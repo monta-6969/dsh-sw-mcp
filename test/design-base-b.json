@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 3,
+  "designId": "base-b",
+  "units": "mm",
+  "params": {
+    "plate.w": 100,
+    "plate.h": 60,
+    "plate.t": 20,
+    "hole.d": 6,
+    "hole.edge": 10
+  },
+  "features": [
+    { "kind": "basePlate", "id": "plate", "plane": 0, "width": "plate.w", "height": "plate.h", "thickness": "plate.t" },
+    { "kind": "holes", "id": "mountingHoles", "face": "top", "diameter": "hole.d", "throughAll": true,
+      "pattern": { "kind": "corners", "width": "plate.w", "height": "plate.h", "edge": "hole.edge" } }
+  ]
+}

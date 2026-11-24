@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 4,
+  "jobId": "job_0123456789abcdef01234567",
+  "operationId": "run_1:plate:build:1",
+  "op": "build",
+  "state": "succeeded",
+  "refs": {
+    "projectId": "proj_plate",
+    "runId": "run_1",
+    "instanceId": "inst_0123456789abcdef01234567",
+    "documentId": "doc_0123456789abcdef01234567",
+    "revision": 1
+  },
+  "progress": {
+    "phase": "verify",
+    "percent": 100,
+    "message": "volume 48000 mm^3",
+    "at": "2026-11-10T12:00:03Z"
+  },
+  "worker": { "pid": 1234, "instanceId": "inst_0123456789abcdef01234567" },
+  "result": { "status": "ok", "volume": 48000 },
+  "createdAt": "2026-11-10T12:00:00Z",
+  "startedAt": "2026-11-10T12:00:00.100Z",
+  "finishedAt": "2026-11-10T12:00:03Z",
+  "retention": { "until": "2026-11-11T12:00:00Z" }
+}

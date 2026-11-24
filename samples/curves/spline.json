@@ -1,0 +1,13 @@
+{
+  "kind": "spline",
+  "id": "cam",
+  "construction": false,
+  "params": {
+    "points": [[0, 0], [8, 12], [24, 14], [40, 4], [48, 0]],
+    "degree": 3,
+    "tangents": { "start": [1, 0], "end": [0, -1] },
+    "closed": false
+  },
+  "toleranceMm": 0.005,
+  "source": "spec"
+}

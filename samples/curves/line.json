@@ -1,0 +1,17 @@
+{
+  "kind": "line",
+  "id": "c1",
+  "construction": false,
+  "params": {
+    "start": [0, 0],
+    "end": [80, 0]
+  },
+  "constraints": [
+    { "type": "horizontal", "refs": ["c1"] }
+  ],
+  "dimensions": [
+    { "name": "plate.w", "type": "distance", "value": 80, "refs": ["c1"] }
+  ],
+  "continuity": { "start": "coincident", "end": "coincident" },
+  "source": "spec"
+}

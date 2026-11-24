@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sw-mcp.local/contracts/evidenceDiff.schema.json",
+  "title": "sw-mcp drawing/model difference",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 9007199254740991
+    },
+    "snapshotId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "sourceKey": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "blocking",
+              "major",
+              "minor",
+              "info"
+            ]
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "outline",
+              "hiddenEdge",
+              "hole",
+              "boss",
+              "pocket",
+              "dimension",
+              "section",
+              "feature",
+              "pattern"
+            ]
+          },
+          "view": {
+            "type": "string",
+            "minLength": 1
+          },
+          "region": {
+            "type": "object",
+            "properties": {
+              "x": {
+                "type": "number",
+                "minimum": 0
+              },
+              "y": {
+                "type": "number",
+                "minimum": 0
+              },
+              "w": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "h": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "required": [
+              "x",
+              "y",
+              "w",
+              "h"
+            ],
+            "additionalProperties": false
+          },
+          "entityRef": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "face",
+                  "edge",
+                  "feature",
+                  "dimension",
+                  "vertex",
+                  "body"
+                ]
+              },
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 160
+              },
+              "synthetic": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "kind",
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "expected": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "mm",
+                  "deg"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "measured": {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "enum": [
+                  "mm",
+                  "deg"
+                ]
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ],
+            "additionalProperties": false
+          },
+          "delta": {
+            "type": "number"
+          },
+          "confidence": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "nextObservation": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "view",
+          "region"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "items"
+  ],
+  "additionalProperties": false
+}

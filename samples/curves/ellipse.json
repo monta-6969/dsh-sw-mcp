@@ -1,0 +1,16 @@
+{
+  "kind": "ellipse",
+  "id": "oval",
+  "construction": false,
+  "params": {
+    "center": [0, 0],
+    "major": 30,
+    "minor": 18,
+    "rotation": 15
+  },
+  "dimensions": [
+    { "name": "oval.major", "type": "major", "value": 60, "refs": ["oval"] },
+    { "name": "oval.minor", "type": "minor", "value": 36, "refs": ["oval"] }
+  ],
+  "source": "spec"
+}

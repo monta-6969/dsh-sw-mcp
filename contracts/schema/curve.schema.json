@@ -1,0 +1,187 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sw-mcp.local/contracts/curve.schema.json",
+  "title": "sw-mcp sketch curve",
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "line",
+        "circle",
+        "arc",
+        "ellipse",
+        "ellipticArc",
+        "spline",
+        "equationCurve",
+        "polyline"
+      ]
+    },
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "construction": {
+      "default": false,
+      "type": "boolean"
+    },
+    "params": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "constraints": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "horizontal",
+              "vertical",
+              "coincident",
+              "tangent",
+              "equal",
+              "concentric",
+              "symmetric",
+              "parallel",
+              "perpendicular",
+              "fix",
+              "midpoint",
+              "intersection",
+              "pierce"
+            ]
+          },
+          "refs": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "value": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "type",
+          "refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "dimensions": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "distance",
+              "radius",
+              "diameter",
+              "angle",
+              "major",
+              "minor"
+            ]
+          },
+          "value": {
+            "type": "number"
+          },
+          "refs": {
+            "default": [],
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "driving": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "value",
+          "refs"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "continuity": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "string",
+          "enum": [
+            "free",
+            "coincident",
+            "tangent",
+            "closed"
+          ]
+        },
+        "end": {
+          "type": "string",
+          "enum": [
+            "free",
+            "coincident",
+            "tangent",
+            "closed"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "spec",
+        "readback",
+        "imageCandidate"
+      ]
+    },
+    "native": {
+      "type": "object",
+      "properties": {
+        "segmentType": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "additionalProperties": false
+    },
+    "toleranceMm": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 10
+    }
+  },
+  "required": [
+    "kind",
+    "construction",
+    "params",
+    "constraints",
+    "dimensions"
+  ],
+  "additionalProperties": false
+}

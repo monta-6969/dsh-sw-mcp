@@ -1,0 +1,531 @@
+{
+  "designId": "p1-bracket",
+  "source": {
+    "file": "draws/p1.jpg",
+    "size": [
+      807,
+      592
+    ],
+    "note": "扫描图纸照片，比 p2 更糊；非等比（见 scaleProof）"
+  },
+  "projection": {
+    "kind": "first-angle",
+    "why": "主视图上方是斜二测（立体示意），俯视图放在主视图下方 —— 第一角法的约定；据此右方那个端视是左视图。"
+  },
+  "scaleProof": [],
+  "scaleProofNote": "这张图没有做逐视图像素标定（p2 做过，结论是同一张图里 1.15–2.33 px/mm 都有，像素不能当长度）。p1 的尺寸全部来自标注。",
+  "views": [
+    {
+      "id": "front",
+      "label": "主视图",
+      "shows": [
+        "底板截面",
+        "缺口 8.4×1.3",
+        "筋板梯形",
+        "凸台 Ø11.1 与内孔 Ø5.7",
+        "1 mm 小筋"
+      ],
+      "kind": "主视图",
+      "viewDirection": "+Y",
+      "imageRight": "+X",
+      "imageUp": "+Z",
+      "region": [
+        0.02,
+        0.03,
+        0.47,
+        0.62
+      ]
+    },
+    {
+      "id": "top",
+      "label": "俯视图",
+      "shows": [
+        "底板 20.2×13.4 带两角 R3.4",
+        "两个 Ø3.4 通孔（与圆角同心）",
+        "筋板宽 16.1",
+        "凸台长 8.4"
+      ],
+      "kind": "俯视图",
+      "viewDirection": "-Z",
+      "imageRight": "+X",
+      "imageUp": "+Y",
+      "region": [
+        0.02,
+        0.63,
+        0.47,
+        0.99
+      ]
+    },
+    {
+      "id": "left",
+      "label": "左视图",
+      "shows": [
+        "凸台圆 Ø11.1",
+        "筋板厚 3.3",
+        "底板厚"
+      ],
+      "kind": "左视图",
+      "viewDirection": "+X",
+      "imageRight": "-Y",
+      "imageUp": "+Z",
+      "region": [
+        0.48,
+        0.03,
+        0.7,
+        0.62
+      ]
+    },
+    {
+      "id": "iso",
+      "label": "斜二测示意",
+      "shows": [
+        "整体形状与凸台朝向"
+      ],
+      "kind": "轴测图",
+      "pictorial": true,
+      "region": [
+        0.48,
+        0.63,
+        0.99,
+        0.99
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "d1",
+      "value": 20.2,
+      "unit": "mm",
+      "what": "底板长（X）",
+      "anchor": {
+        "plane": "minX"
+      },
+      "to": {
+        "plane": "maxX"
+      },
+      "view": "top"
+    },
+    {
+      "id": "d2",
+      "value": 13.4,
+      "unit": "mm",
+      "what": "底板宽（Z）",
+      "anchor": {
+        "plane": "minZ"
+      },
+      "to": {
+        "plane": "maxZ"
+      },
+      "view": "top"
+    },
+    {
+      "id": "d3",
+      "value": 3.4,
+      "unit": "mm",
+      "what": "底板厚（Y）",
+      "anchor": {
+        "plane": "minY"
+      },
+      "to": {
+        "plane": "minY+3.4"
+      },
+      "view": "front"
+    },
+    {
+      "id": "d4",
+      "value": 3.4,
+      "unit": "mm",
+      "what": "底板两角圆角半径 R3.4",
+      "note": "只做靠筋板一侧的两个角，另外两角是直角",
+      "anchor": "底板靠筋板一侧的两个角",
+      "view": "top"
+    },
+    {
+      "id": "d5",
+      "value": 3.4,
+      "unit": "mm",
+      "what": "安装孔 Ø3.4 ×2",
+      "detail": "与 R3.4 圆角同心，故孔心离两边各 3.4",
+      "anchor": "与 R3.4 圆角同心，孔心离两边各 3.4",
+      "view": "top"
+    },
+    {
+      "id": "d6",
+      "value": 8.4,
+      "unit": "mm",
+      "what": "底面中央缺口宽",
+      "anchor": {
+        "plane": "minX+5.9"
+      },
+      "view": "top"
+    },
+    {
+      "id": "d7",
+      "value": 1.3,
+      "unit": "mm",
+      "what": "缺口深（从底面往上升）",
+      "anchor": "底板底面中央向上量",
+      "view": "front"
+    },
+    {
+      "id": "d8",
+      "value": 16.1,
+      "unit": "mm",
+      "what": "筋板底宽",
+      "anchor": "筋板根部，横跨底板宽度方向",
+      "view": "top"
+    },
+    {
+      "id": "d9",
+      "value": 3.3,
+      "unit": "mm",
+      "what": "筋板厚",
+      "anchor": "筋板厚度方向（沿 X）",
+      "view": "left"
+    },
+    {
+      "id": "d10",
+      "value": 11.1,
+      "unit": "mm",
+      "what": "凸台外径 Ø11.1",
+      "anchor": "凸台外圆，轴线沿 Z 向",
+      "view": "left"
+    },
+    {
+      "id": "d11",
+      "value": 5.7,
+      "unit": "mm",
+      "what": "凸台内孔 Ø5.7（贯穿）",
+      "anchor": "凸台内孔，与 Ø11.1 同心",
+      "view": "left"
+    },
+    {
+      "id": "d12",
+      "value": 8.4,
+      "unit": "mm",
+      "what": "凸台轴向长",
+      "anchor": "凸台端面到底板前表面",
+      "view": "top"
+    },
+    {
+      "id": "d13",
+      "value": 13.4,
+      "unit": "mm",
+      "what": "凸台轴线到板底距离",
+      "note": "与底板宽同值，图上标的 13.4 就是这个高度",
+      "anchor": "凸台轴线相对板底的高度",
+      "view": "front"
+    },
+    {
+      "id": "d14",
+      "value": 1,
+      "unit": "mm",
+      "what": "小筋厚度（主视图中间的细条）",
+      "anchor": "主视图中间的细条，贴筋板前侧",
+      "view": "front"
+    },
+    {
+      "id": "d15",
+      "value": 1.7,
+      "unit": "mm",
+      "what": "筋板前伸台阶宽（见 ng1）",
+      "derived": true,
+      "anchor": "侧视图台阶组，见 openQuestions ng1",
+      "view": "left"
+    },
+    {
+      "id": "d16",
+      "value": 1.7,
+      "unit": "mm",
+      "what": "第二个台阶宽（见 ng1）",
+      "derived": true,
+      "anchor": "侧视图台阶组，见 openQuestions ng1",
+      "view": "left"
+    },
+    {
+      "id": "d17",
+      "value": 3.3,
+      "unit": "mm",
+      "what": "台阶组总宽 = 1.7+1.7 附近的一组（见 ng1）",
+      "derived": true,
+      "anchor": "侧视图台阶组，见 openQuestions ng1",
+      "view": "left"
+    }
+  ],
+  "chains": [
+    {
+      "id": "c1",
+      "expr": "3.4 + 5.7/2 + 11.1/2 = 11.8 ≤ 13.4",
+      "why": "凸台放在板上不超出板边"
+    },
+    {
+      "id": "c2",
+      "expr": "18.95 = 3.4 + 13.4 + 11.1/2 − 11.1/2 + 2.15",
+      "why": "总高由凸台外圆顶点决定：13.4 + 5.55 = 18.95"
+    },
+    {
+      "id": "c3",
+      "expr": "20.2 − 2×3.4 = 13.4",
+      "why": "两安装孔中心距，正好等于板宽（图上标 13.4 与之吻合，属于巧合同值，别混用）"
+    }
+  ],
+  "features": [
+    {
+      "id": "plate",
+      "what": "底板 20.2×13.4×3.4，靠筋板侧两角 R3.4",
+      "from": [
+        "d1",
+        "d2",
+        "d3",
+        "d4"
+      ]
+    },
+    {
+      "id": "mount_holes",
+      "what": "两个 Ø3.4 通孔",
+      "from": [
+        "d5",
+        "d4"
+      ],
+      "note": "孔心与圆角同心，所以孔距 = 20.2 − 2×3.4"
+    },
+    {
+      "id": "notch",
+      "what": "底面缺口 8.4×1.3 贯穿板宽",
+      "from": [
+        "d6",
+        "d7"
+      ]
+    },
+    {
+      "id": "web",
+      "what": "梯形筋板，底宽 16.1、厚 3.3，斜边与凸台外圆相切",
+      "from": [
+        "d8",
+        "d9",
+        "d10",
+        "d13"
+      ]
+    },
+    {
+      "id": "boss",
+      "what": "Ø11.1 圆柱凸台，轴向长 8.4，轴线高 13.4",
+      "from": [
+        "d10",
+        "d12",
+        "d13"
+      ]
+    },
+    {
+      "id": "bore",
+      "what": "Ø5.7 内孔贯穿凸台",
+      "from": [
+        "d11"
+      ]
+    },
+    {
+      "id": "rib",
+      "what": "1 mm 小筋，从筋板前表面再长 1.7",
+      "from": [
+        "d14",
+        "d15"
+      ]
+    }
+  ],
+  "assumptions": [
+    "只有靠筋板一侧的两个板角是 R3.4，另外两角直角（图上另两角没有圆角线）。",
+    "Ø3.4 通孔与 R3.4 圆角同心 —— 图上两个圆共心，且标注只有一个 3.4。",
+    "缺口贯穿整个板宽（13.4），不是局部凹坑。",
+    "筋板斜边与凸台外圆相切（图上斜线正好落在圆上）。",
+    "凸台端面与筋板前表面齐平；凸台轴向朝 −Z。"
+  ],
+  "openQuestions": [
+    {
+      "id": "ng1",
+      "what": "侧视图右下方 1,7 / 1,7 / 3,3 那一组",
+      "status": "已按下述解释建模",
+      "current": "按「筋板脚部的 45° 倒角切除」建模：rib_foot 草图在右视基准面上（z +3.3..+5.0、y 3.2..5.1），rib_foot_cut 沿 ±X 双向贯穿切除。体积从 1590.634 降到 1584.7046，与解析值 1583.37 的偏差从 0.459% 降到 0.084% —— 这是支持「切」而不是「加」的量化证据。",
+      "evidence": "五种加料摆法全部失败（体积 +0.618 或一位不变，最后被 FEATURE_CHANGED_NOTHING 抓住：那块料完全落在加强筋里）；改成切除后一次成功，且残差缩小五倍。",
+      "remains": "仍需确认 3,3 是腹板厚度（当前解释）还是倒角在 z 向的起点。"
+    },
+    {
+      "id": "ng2",
+      "what": "两安装孔的轴线方向：贯穿底板（Y）还是沿筋板方向（Z）？",
+      "current": "按贯穿底板建模（俯视图上画成两个整圆，且与 R3.4 圆角同心）",
+      "blocks": []
+    }
+  ],
+  "checks": [
+    {
+      "id": "k1",
+      "what": "底板长 20.2",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minX"
+        },
+        "b": {
+          "plane": "maxX"
+        }
+      },
+      "expect": 20.2,
+      "tol": 0.02,
+      "from": [
+        "d1"
+      ]
+    },
+    {
+      "id": "k2",
+      "what": "底板宽 13.4",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minZ"
+        },
+        "b": {
+          "plane": "maxZ"
+        }
+      },
+      "expect": 13.4,
+      "tol": 0.02,
+      "from": [
+        "d2"
+      ]
+    },
+    {
+      "id": "k3",
+      "what": "总高 18.95",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minY"
+        },
+        "b": {
+          "plane": "maxY"
+        }
+      },
+      "expect": 18.95,
+      "tol": 0.05,
+      "from": [
+        "d13",
+        "d10"
+      ]
+    },
+    {
+      "id": "k4",
+      "what": "两个 Ø3.4 通孔",
+      "measure": "axis",
+      "args": {
+        "diameter": 3.4
+      },
+      "pick": "count",
+      "expect": 2,
+      "tol": 0,
+      "from": [
+        "d5"
+      ]
+    },
+    {
+      "id": "k5",
+      "what": "一个 Ø11.1 凸台",
+      "measure": "axis",
+      "args": {
+        "diameter": 11.1,
+        "hole": false
+      },
+      "pick": "count",
+      "expect": 1,
+      "tol": 0,
+      "from": [
+        "d10"
+      ]
+    },
+    {
+      "id": "k6",
+      "what": "一个 Ø5.7 内孔",
+      "measure": "axis",
+      "args": {
+        "diameter": 5.7
+      },
+      "pick": "count",
+      "expect": 1,
+      "tol": 0,
+      "from": [
+        "d11"
+      ]
+    },
+    {
+      "id": "k7",
+      "what": "两孔中心距 13.4",
+      "measure": "spacing",
+      "args": {
+        "diameter": 3.4
+      },
+      "pick": "pairs[0].distance",
+      "expect": 13.4,
+      "tol": 0.02,
+      "from": [
+        "d5"
+      ]
+    },
+    {
+      "id": "k8",
+      "what": "凸台轴线到底面 13.4",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minY"
+        },
+        "b": {
+          "axis": {
+            "diameter": 11.1,
+            "hole": false
+          }
+        }
+      },
+      "expect": 13.4,
+      "tol": 0.05,
+      "from": [
+        "d13"
+      ]
+    }
+  ],
+  "schemaVersion": 3,
+  "drawingId": "p1-bracket",
+  "coordinateSystem": {
+    "part": {
+      "xAxis": "+X",
+      "yAxis": "+Y",
+      "zAxis": "+Z",
+      "origin": "底板底面左后角（X 向右、Y 向后、Z 向上，右手系）",
+      "why": "零件按工程图习惯：X 向右量长度、Y 向后量深度、Z 向上量高度"
+    },
+    "model": {
+      "xAxis": "+X",
+      "yAxis": "+Y",
+      "zAxis": "+Z",
+      "note": "SolidWorks 世界坐标：Y 向上、Z 朝观察者"
+    },
+    "partToModel": {
+      "xAxis": "+X",
+      "yAxis": "-Z",
+      "zAxis": "+Y",
+      "why": "零件 X→模型 X；零件 Z（上）→模型 Y（上）；零件 Y（向后）→模型 −Z（远离观察者）"
+    }
+  },
+  "cuts": [],
+  "unresolved": [
+    {
+      "item": "筋板脚部 45° 倒角的确切起止",
+      "region": [
+        0.48,
+        0.03,
+        0.7,
+        0.62
+      ],
+      "need": "左视图右下方 1,7/1,7/3,3 那处的完整引出线；或补一张局部放大",
+      "status": "resolved-as-spec",
+      "note": "按 1,7×1,7 的 45° 倒角切除建模，体积与解析值差 0.084%"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "kind": "arc",
+  "id": "corner",
+  "construction": false,
+  "params": {
+    "center": [80, 0],
+    "radius": 10,
+    "startAngle": 0,
+    "endAngle": 90,
+    "direction": 1
+  },
+  "continuity": { "start": "tangent", "end": "tangent" },
+  "source": "spec"
+}

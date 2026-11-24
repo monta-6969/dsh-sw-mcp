@@ -1,0 +1,344 @@
+{
+  "_comment": "p1 支架。世界坐标：X 长度(20.2) Y 高度(0..18.95) Z 深度(0..13.4)。plane 1=上视(u=+X,v=-Z)，plane 0=前视(u=+X,v=+Y)。",
+  "designId": "p1-bracket",
+  "schemaVersion": 3,
+  "units": "mm",
+  "features": [
+    {
+      "kind": "sketch",
+      "id": "plate_outline",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "roundedRect",
+          "center": [
+            0,
+            -6.7
+          ],
+          "width": 20.2,
+          "height": 13.4,
+          "radius": 3.4,
+          "sharp": [
+            0,
+            1
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "plate",
+      "profile": "plate_outline",
+      "depth": 3.4,
+      "direction": "+Y"
+    },
+    {
+      "kind": "sketch",
+      "id": "holes",
+      "plane": 1,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            -6.7,
+            -3.4
+          ],
+          "diameter": 3.4
+        },
+        {
+          "shape": "circle",
+          "center": [
+            6.7,
+            -3.4
+          ],
+          "diameter": 3.4
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "hole_cut",
+      "profile": "holes",
+      "both": true,
+      "throughAll": true
+    },
+    {
+      "kind": "sketch",
+      "id": "notch",
+      "plane": 0,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            0,
+            0.15
+          ],
+          "width": 8.4,
+          "height": 2.3
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "notch_cut",
+      "profile": "notch",
+      "both": true,
+      "throughAll": true
+    },
+    {
+      "kind": "sketch",
+      "id": "web",
+      "plane": 0,
+      "primitives": [
+        {
+          "shape": "polyline",
+          "closed": true,
+          "points": [
+            [
+              -8.05,
+              3.4
+            ],
+            [
+              8.05,
+              3.4
+            ],
+            [
+              5.55,
+              13.4
+            ],
+            [
+              -5.55,
+              13.4
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "web_solid",
+      "profile": "web",
+      "depth": 3.3,
+      "direction": "+Z"
+    },
+    {
+      "kind": "sketch",
+      "id": "boss",
+      "plane": 0,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            0,
+            13.4
+          ],
+          "diameter": 11.1
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "boss_solid",
+      "profile": "boss",
+      "depth": 8.4,
+      "direction": "+Z"
+    },
+    {
+      "_why": "立面图里那根 1 mm 宽的竖筋。它必须凸出筋板前面才看得见 —— 埋在 3.3 厚的筋板里面等于没建。所以从筋板前面 z=3.3 起再长 1.7。",
+      "kind": "sketch",
+      "id": "rib",
+      "plane": 0,
+      "primitives": [
+        {
+          "shape": "rect",
+          "center": [
+            0,
+            5.7
+          ],
+          "width": 1,
+          "height": 4.6
+        }
+      ]
+    },
+    {
+      "kind": "extrude",
+      "id": "rib_solid",
+      "profile": "rib",
+      "depth": 1.7,
+      "direction": "+Z",
+      "startOffset": 3.3
+    },
+    {
+      "kind": "sketch",
+      "id": "rib_foot",
+      "plane": 2,
+      "primitives": [
+        {
+          "shape": "path",
+          "closed": true,
+          "start": [
+            -5,
+            3.2
+          ],
+          "segments": [
+            {
+              "to": [
+                -3.3,
+                3.2
+              ]
+            },
+            {
+              "to": [
+                -3.3,
+                5.1
+              ]
+            },
+            {
+              "to": [
+                -5,
+                3.2
+              ]
+            }
+          ]
+        }
+      ],
+      "_why": "右视基准面：u=-Z、v=+Y。下边压到 y=3.2 是为了离开板顶面（y=3.4）那条公共边 —— 轮廓边正好落在公共面上时 FeatureCut4 会静默返回 null。"
+    },
+    {
+      "kind": "cut",
+      "id": "rib_foot_cut",
+      "profile": "rib_foot",
+      "throughAll": true,
+      "both": true,
+      "_why": "侧视图右下方 1,7/1,7 的 45° 倒角：它就是筋板脚部的斜切，不是外加的角撑。加料摆法全部落在加强筋里（被 FEATURE_CHANGED_NOTHING 抓住），改成切除后体积更接近解析值。"
+    },
+    {
+      "kind": "sketch",
+      "id": "bore",
+      "plane": 0,
+      "primitives": [
+        {
+          "shape": "circle",
+          "center": [
+            0,
+            13.4
+          ],
+          "diameter": 5.7
+        }
+      ]
+    },
+    {
+      "kind": "cut",
+      "id": "bore_cut",
+      "profile": "bore",
+      "both": true,
+      "throughAll": true
+    }
+  ],
+  "__expectVolume": 1583.37,
+  "__expect": {
+    "_why": "体积和包围盒只记不判。下面这些是图纸上的标注，逐条量出来才允许说「和图纸一致」。",
+    "checks": [
+      {
+        "name": "底板长 20.2",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minX"
+          },
+          "b": {
+            "plane": "maxX"
+          }
+        },
+        "expect": 20.2,
+        "tol": 0.02
+      },
+      {
+        "name": "底板宽 13.4",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minZ"
+          },
+          "b": {
+            "plane": "maxZ"
+          }
+        },
+        "expect": 13.4,
+        "tol": 0.02
+      },
+      {
+        "name": "总高 18.95（凸台顶到板底）",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minY"
+          },
+          "b": {
+            "plane": "maxY"
+          }
+        },
+        "expect": 18.95,
+        "tol": 0.05
+      },
+      {
+        "name": "安装孔 Ø3.4 两个",
+        "measure": "axis",
+        "args": {
+          "diameter": 3.4
+        },
+        "pick": "count",
+        "expect": 2,
+        "tol": 0
+      },
+      {
+        "name": "凸台 Ø11.1",
+        "measure": "axis",
+        "args": {
+          "diameter": 11.1,
+          "hole": false
+        },
+        "pick": "count",
+        "expect": 1,
+        "tol": 0
+      },
+      {
+        "name": "内孔 Ø5.7",
+        "measure": "axis",
+        "args": {
+          "diameter": 5.7
+        },
+        "pick": "count",
+        "expect": 1,
+        "tol": 0
+      },
+      {
+        "name": "两安装孔中心距 13.4",
+        "measure": "spacing",
+        "args": {
+          "diameter": 3.4
+        },
+        "pick": "pairs[0].distance",
+        "expect": 13.4,
+        "tol": 0.02
+      },
+      {
+        "name": "凸台轴线到底面 13.4",
+        "measure": "distance",
+        "args": {
+          "a": {
+            "plane": "minY"
+          },
+          "b": {
+            "axis": {
+              "diameter": 11.1,
+              "hole": false
+            }
+          }
+        },
+        "expect": 13.4,
+        "tol": 0.05
+      }
+    ]
+  }
+}

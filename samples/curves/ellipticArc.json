@@ -1,0 +1,14 @@
+{
+  "kind": "ellipticArc",
+  "id": "oval-end",
+  "construction": false,
+  "params": {
+    "center": [0, 0],
+    "major": 30,
+    "minor": 18,
+    "rotation": 0,
+    "startParam": 0,
+    "endParam": 180
+  },
+  "source": "spec"
+}

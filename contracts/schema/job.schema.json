@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://sw-mcp.local/contracts/job.schema.json",
+  "title": "sw-mcp job",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 4,
+      "maximum": 9007199254740991
+    },
+    "jobId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "operationId": {
+      "type": "string",
+      "maxLength": 240
+    },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "request": {
+      "type": "object",
+      "propertyNames": {
+        "type": "string"
+      },
+      "additionalProperties": {}
+    },
+    "effect": {
+      "type": "string",
+      "enum": [
+        "none",
+        "applied",
+        "partial",
+        "unknown"
+      ]
+    },
+    "owner": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "required": [
+        "pid",
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "reconciliation": {
+      "type": "object",
+      "properties": {
+        "at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "at",
+        "note"
+      ],
+      "additionalProperties": false
+    },
+    "op": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "running",
+        "waiting-ui",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ]
+    },
+    "refs": {
+      "type": "object",
+      "properties": {
+        "projectId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "documentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "configuration": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "designId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "stageJobId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "additionalProperties": false
+    },
+    "progress": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "percent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 4000
+        },
+        "at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        }
+      },
+      "required": [
+        "at"
+      ],
+      "additionalProperties": false
+    },
+    "worker": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        }
+      },
+      "additionalProperties": false
+    },
+    "result": {},
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 8000
+        },
+        "details": {}
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "additionalProperties": false
+    },
+    "createdAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "startedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "finishedAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+    },
+    "cancelRequested": {
+      "type": "boolean"
+    },
+    "retention": {
+      "type": "object",
+      "properties": {
+        "until": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,6})?Z$"
+        }
+      },
+      "required": [
+        "until"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "jobId",
+    "op",
+    "state",
+    "createdAt"
+  ],
+  "additionalProperties": false
+}

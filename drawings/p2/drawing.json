@@ -1,0 +1,673 @@
+{
+  "schemaVersion": 3,
+  "drawingId": "p2-housing",
+  "title": "轴承座（两螺栓固定的立式轴承座）",
+  "source": {
+    "path": "D:\\静静\\临时文件\\draws\\p2.jpg",
+    "width": 700,
+    "height": 452,
+    "note": "扫描件，非等比：同一张图上每个视图的横向与纵向比例都不同"
+  },
+  "projection": {
+    "kind": "first-angle",
+    "why": "俯视图在主视图下方、左视图在主视图右方 —— 第一角法。右边那个端视图因此是左视图。",
+    "checkedAgainst": "图框内的投影符号"
+  },
+  "scaleProof": [
+    {
+      "view": "front",
+      "axis": "x",
+      "pixels": 261,
+      "mm": 225,
+      "pxPerMm": 1.16
+    },
+    {
+      "view": "front",
+      "axis": "y",
+      "pixels": 81,
+      "mm": 60,
+      "pxPerMm": 1.35
+    },
+    {
+      "view": "end",
+      "axis": "x",
+      "pixels": 66,
+      "mm": 40,
+      "pxPerMm": 1.65
+    },
+    {
+      "view": "end",
+      "axis": "y",
+      "pixels": 46,
+      "mm": 40,
+      "pxPerMm": 1.15
+    },
+    {
+      "view": "end",
+      "axis": "y",
+      "pixels": 35,
+      "mm": 15,
+      "pxPerMm": 2.33
+    }
+  ],
+  "_scaleProofWhy": "这五条放在这里是为了证明像素不能当长度用：1.16 和 2.33 差一倍。像素只用于判断标注归属，尺寸只来自标注文字与尺寸链。",
+  "views": [
+    {
+      "id": "front",
+      "kind": "主视图",
+      "shows": "长 225、板厚 15、槽宽 14、两端槽",
+      "region": [
+        0.0571,
+        0.6637,
+        0.9429,
+        1
+      ],
+      "viewDirection": "+Y",
+      "imageRight": "+X",
+      "imageUp": "+Z"
+    },
+    {
+      "id": "top",
+      "kind": "俯视图",
+      "shows": "深 110、凸台 Ø75、支承体厚 44、孔 Ø40",
+      "region": [
+        0.0571,
+        0.0885,
+        0.9429,
+        0.6637
+      ],
+      "viewDirection": "-Z",
+      "imageRight": "+X",
+      "imageUp": "+Y"
+    },
+    {
+      "id": "end",
+      "kind": "左视图",
+      "shows": "外廓 Ø80/拱顶 R40、主孔 Ø40、轴线高 60、板厚 15",
+      "region": [
+        0.8,
+        0.0885,
+        1,
+        1
+      ],
+      "viewDirection": "+X",
+      "imageRight": "-Y",
+      "imageUp": "+Z"
+    },
+    {
+      "id": "iso",
+      "kind": "轴测图",
+      "shows": "整体形状与下凹弧面",
+      "region": [
+        0,
+        0,
+        0.3429,
+        0.6637
+      ],
+      "pictorial": true
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "d225",
+      "value": 225,
+      "kind": "linear",
+      "anchor": "底板沿 X 全长",
+      "view": "front"
+    },
+    {
+      "id": "d110",
+      "value": 110,
+      "kind": "linear",
+      "anchor": "底板沿 Z 全宽",
+      "view": "top"
+    },
+    {
+      "id": "d15",
+      "value": 15,
+      "kind": "linear",
+      "anchor": "底板厚度",
+      "view": "end"
+    },
+    {
+      "id": "dR13",
+      "value": 13,
+      "kind": "radius",
+      "anchor": "底板四角圆角",
+      "view": "top"
+    },
+    {
+      "id": "d185",
+      "value": 185,
+      "kind": "linear",
+      "anchor": "两端槽的 R7 弧心距",
+      "view": "front"
+    },
+    {
+      "id": "d20",
+      "value": 20,
+      "kind": "linear",
+      "anchor": "右端弧心到右端面",
+      "view": "front",
+      "derived": "(225-185)/2"
+    },
+    {
+      "id": "d14",
+      "value": 14,
+      "kind": "linear",
+      "anchor": "槽宽（= 端部弧直径 R7×2）",
+      "view": "front"
+    },
+    {
+      "id": "d60",
+      "value": 60,
+      "kind": "linear",
+      "anchor": "底面到主孔轴线",
+      "view": "end"
+    },
+    {
+      "id": "d80",
+      "value": 80,
+      "kind": "diameter",
+      "anchor": "支承体外廓圆",
+      "view": "end"
+    },
+    {
+      "id": "dR40",
+      "value": 40,
+      "kind": "radius",
+      "anchor": "拱顶圆弧，与 Ø80 同心",
+      "view": "end"
+    },
+    {
+      "id": "d40",
+      "value": 40,
+      "kind": "diameter",
+      "anchor": "主孔内径",
+      "view": "end"
+    },
+    {
+      "id": "d75",
+      "value": 75,
+      "kind": "diameter",
+      "anchor": "凸台外径（沿轴向长 100）",
+      "view": "top"
+    },
+    {
+      "id": "d100",
+      "value": 100,
+      "kind": "linear",
+      "anchor": "凸台轴向长度（50+50）",
+      "view": "top"
+    },
+    {
+      "id": "d44",
+      "value": 44,
+      "kind": "linear",
+      "anchor": "支承体厚度（沿 X）",
+      "view": "top"
+    },
+    {
+      "id": "d3",
+      "value": 3,
+      "kind": "linear",
+      "anchor": "Ø75 台阶轴向长度",
+      "view": "top",
+      "uncertain": true
+    },
+    {
+      "id": "dkw",
+      "value": 12,
+      "kind": "linear",
+      "anchor": "孔底键槽宽",
+      "view": "end"
+    },
+    {
+      "id": "dkd",
+      "value": 4,
+      "kind": "linear",
+      "anchor": "孔底键槽深",
+      "derived": "44 - 40",
+      "view": "end"
+    }
+  ],
+  "chains": [
+    {
+      "id": "c1",
+      "expr": "20 + 185 + 20",
+      "terms": [
+        "d20",
+        "d185",
+        "d20"
+      ],
+      "sum": 225,
+      "ok": true,
+      "why": "对上 225，说明 185 是两个弧心之间的距离，20 是弧心到端面 —— 而不是相邻两槽的间距"
+    },
+    {
+      "id": "c2",
+      "expr": "60 + R40",
+      "terms": [
+        "d60",
+        "dR40"
+      ],
+      "sum": 100,
+      "ok": true,
+      "why": "总高 100。这条也是「60 是底面到轴线」而不是「板顶到轴线」的证据"
+    },
+    {
+      "id": "c3",
+      "expr": "44 - 40",
+      "terms": [
+        "d44",
+        "d40"
+      ],
+      "sum": 4,
+      "ok": true,
+      "why": "键槽深 4；说明 44 是「孔径 + 键槽深」，不是随意的一个厚度",
+      "op": "diff"
+    },
+    {
+      "id": "c4",
+      "expr": "50 + 50",
+      "terms": [
+        "d100"
+      ],
+      "sum": 100,
+      "ok": true,
+      "why": "凸台以支承体为中心对称，所以沿 X 长 100"
+    }
+  ],
+  "features": [
+    {
+      "id": "base",
+      "kind": "extrude",
+      "from": [
+        "d225",
+        "d110",
+        "d15",
+        "dR13"
+      ],
+      "profile": {
+        "shape": "roundedRect",
+        "width": 225,
+        "height": 110,
+        "radius": 13,
+        "center": [
+          0,
+          -55
+        ]
+      },
+      "plane": 1,
+      "direction": "+Y",
+      "depth": 15
+    },
+    {
+      "id": "slots",
+      "kind": "cut",
+      "from": [
+        "d185",
+        "d20",
+        "d14"
+      ],
+      "perSide": true,
+      "pieces": [
+        {
+          "shape": "rect",
+          "width": 20,
+          "height": 14,
+          "center": [
+            -102.5,
+            -55
+          ]
+        },
+        {
+          "shape": "circle",
+          "diameter": 14,
+          "center": [
+            -92.5,
+            -55
+          ]
+        }
+      ],
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "id": "web",
+      "kind": "extrude",
+      "from": [
+        "d80",
+        "dR40",
+        "d44",
+        "d60"
+      ],
+      "why": "一个闭合轮廓：外廓 + 拱顶 + 下凹弧，让支承体坐在两条腿上。分成「矩形+圆」再切下凹会在公共面上静默失败。",
+      "profile": {
+        "shape": "path",
+        "start": [
+          -95,
+          15
+        ],
+        "segments": [
+          {
+            "to": [
+              -95,
+              60
+            ]
+          },
+          {
+            "arc": {
+              "to": [
+                -15,
+                60
+              ],
+              "center": [
+                -55,
+                60
+              ],
+              "dir": -1
+            }
+          },
+          {
+            "to": [
+              -15,
+              15
+            ]
+          },
+          {
+            "to": [
+              -28.5,
+              15
+            ]
+          },
+          {
+            "to": [
+              -28.5,
+              30
+            ]
+          },
+          {
+            "arc": {
+              "to": [
+                -81.5,
+                30
+              ],
+              "center": [
+                -55,
+                60
+              ],
+              "dir": -1
+            }
+          },
+          {
+            "to": [
+              -81.5,
+              15
+            ]
+          },
+          {
+            "to": [
+              -95,
+              15
+            ]
+          }
+        ]
+      },
+      "plane": 2,
+      "depth": 44,
+      "symmetric": true,
+      "direction": "-X"
+    },
+    {
+      "id": "boss",
+      "kind": "extrude",
+      "from": [
+        "d75",
+        "d100",
+        "d60"
+      ],
+      "profile": {
+        "shape": "circle",
+        "diameter": 75,
+        "center": [
+          -55,
+          60
+        ]
+      },
+      "plane": 2,
+      "depth": 100,
+      "symmetric": true,
+      "direction": "-X"
+    },
+    {
+      "id": "bore",
+      "kind": "cut",
+      "from": [
+        "d40",
+        "d60"
+      ],
+      "profile": {
+        "shape": "circle",
+        "diameter": 40,
+        "center": [
+          -55,
+          60
+        ]
+      },
+      "throughAll": true,
+      "both": true
+    },
+    {
+      "id": "keyway",
+      "kind": "cut",
+      "from": [
+        "dkw",
+        "dkd"
+      ],
+      "profile": {
+        "shape": "rect",
+        "width": 12,
+        "height": 4,
+        "center": [
+          -55,
+          18
+        ]
+      },
+      "throughAll": true,
+      "both": true,
+      "note": "键槽在孔底：Ø40 孔心 y=60、孔底 y=40，键槽 12 宽 × 4 深把孔底再往下开 4（y 37..41，跨过孔底 1 mm 以免轮廓边正好落在孔壁上）。"
+    }
+  ],
+  "assumptions": [
+    "60 是底面到主孔轴线（不是板顶到轴线）：与总高 100 = 60 + R40 自洽",
+    "Ø75 是凸台外径，凸台沿 X 长 100（50+50），比支承体的 Ø80 外廓薄，所以端视图外轮廓仍是 R40",
+    "R13 属于底板四角，不是槽口的沉孔台阶（槽宽 14、端部 R7 已经自洽，不需要额外的 13）",
+    "下凹弧面与拱顶同圆（都 R40、都以 y=60 为心），在 |z-55| > 26.5 处落到 y=30 后竖直下到板面",
+    "44 解释为「Ø40 孔径 + 4 键槽深」，因此支承体厚 44"
+  ],
+  "openQuestions": [
+    "Ø75 台阶（标 3）是车削台阶还是退刀槽？目前未建",
+    "键槽是油槽还是锁紧槽？深度取了 44-40=4",
+    "凸台端面是否有倒角 —— 图上未标"
+  ],
+  "checks": [
+    {
+      "name": "板长 225",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minX"
+        },
+        "b": {
+          "plane": "maxX"
+        }
+      },
+      "expect": 225,
+      "tol": 0.05,
+      "from": "d225"
+    },
+    {
+      "name": "板宽 110",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minZ"
+        },
+        "b": {
+          "plane": "maxZ"
+        }
+      },
+      "expect": 110,
+      "tol": 0.05,
+      "from": "d110"
+    },
+    {
+      "name": "总高 100",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minY"
+        },
+        "b": {
+          "plane": "maxY"
+        }
+      },
+      "expect": 100,
+      "tol": 0.05,
+      "from": [
+        "d60",
+        "dR40"
+      ]
+    },
+    {
+      "name": "主孔轴线到底面 60",
+      "measure": "distance",
+      "args": {
+        "a": {
+          "plane": "minY"
+        },
+        "b": {
+          "axis": {
+            "diameter": 40
+          }
+        }
+      },
+      "expect": 60,
+      "tol": 0.05,
+      "from": "d60"
+    },
+    {
+      "name": "主孔 Ø40",
+      "measure": "axis",
+      "args": {
+        "diameter": 40
+      },
+      "pick": "count",
+      "expect": 1,
+      "tol": 0,
+      "from": "d40"
+    },
+    {
+      "name": "壳体外圆 Ø80（拱顶 + 下凹弧面同半径）",
+      "measure": "axis",
+      "args": {
+        "diameter": 80,
+        "hole": false
+      },
+      "pick": "count",
+      "expect": 2,
+      "tol": 0,
+      "from": "d80"
+    },
+    {
+      "name": "凸台 Ø75",
+      "measure": "axis",
+      "args": {
+        "diameter": 75,
+        "hole": false
+      },
+      "pick": "count",
+      "expect": 1,
+      "tol": 0,
+      "from": "d75"
+    },
+    {
+      "name": "两端槽圆心距 185",
+      "measure": "spacing",
+      "args": {
+        "diameter": 14
+      },
+      "pick": "pairs[0].distance",
+      "expect": 185,
+      "tol": 0.05,
+      "from": "d185"
+    },
+    {
+      "name": "板厚（槽孔长 15）",
+      "measure": "axis",
+      "args": {
+        "diameter": 14
+      },
+      "pick": "matches[0].length",
+      "expect": 15,
+      "tol": 0.2,
+      "from": "d15"
+    },
+    {
+      "name": "主孔沿 X 贯穿 100",
+      "measure": "axis",
+      "args": {
+        "diameter": 40
+      },
+      "pick": "matches[0].length",
+      "expect": 100,
+      "tol": 0.05,
+      "from": "d100"
+    },
+    {
+      "name": "板厚 15（四角 R13 圆柱高，不受端槽圆角影响）",
+      "from": [
+        "dR13"
+      ],
+      "note": "用四角 R13 圆柱的轴向长度量板厚：端槽一旦加了圆角，槽壁长度就不再等于板厚。",
+      "measure": "axis Ø26 length",
+      "expect": 15
+    }
+  ],
+  "coordinateSystem": {
+    "part": {
+      "xAxis": "+X",
+      "yAxis": "+Y",
+      "zAxis": "+Z",
+      "origin": "底板底面左后角（X 向右、Y 向后、Z 向上，右手系）",
+      "why": "零件按工程图习惯：X 向右量长度、Y 向后量深度、Z 向上量高度"
+    },
+    "model": {
+      "xAxis": "+X",
+      "yAxis": "+Y",
+      "zAxis": "+Z",
+      "note": "SolidWorks 世界坐标：Y 向上、Z 朝观察者"
+    },
+    "partToModel": {
+      "xAxis": "+X",
+      "yAxis": "-Z",
+      "zAxis": "+Y",
+      "why": "零件 X→模型 X；零件 Z（上）→模型 Y（上）；零件 Y（向后）→模型 −Z（远离观察者）"
+    }
+  },
+  "cuts": [],
+  "unresolved": [
+    {
+      "item": "Ø75 凸台旁 3 mm 台阶的位置与形式",
+      "region": [
+        0,
+        0.66,
+        0.35,
+        0.99
+      ],
+      "need": "主视图左端面的局部放大，能看出 3 是轴向台阶还是槽口倒角",
+      "status": "open"
+    }
+  ]
+}
