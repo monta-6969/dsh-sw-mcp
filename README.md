@@ -27,8 +27,8 @@ DeepSeek Harness（dsh）的 SOLIDWORKS 2026 建模预设：装好后模式列�
 
 **提供**：
 
-- **14 组工具**，默认只挂 8 个（`catalog` `model` `drawing` `workspace` `inspect` `constraints`
-  `capture` `deliver`），其余用 `catalog action="activate"` 按需打开：`assembly`
+- **19 个工具**：默认只挂 8 个（`catalog` `model` `drawing` `workspace` `inspect` `constraints`
+  `capture` `deliver`），其余 11 个用 `catalog action="activate"` 按需打开：`assembly`
   `assembly_inspect` `advanced_api`（底层 `invoke`/`object`/`kinds`/`batch`）`qa`
   `workspace_ops`（实例与文档运维）以及 `datum` `select` `analysis` `calculate` `job` `task`。
 - **固定回包形状**：`summary` / `designId` / `status` / `changes` / `measurements` /
