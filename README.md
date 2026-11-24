@@ -40,26 +40,34 @@
 
 ## 工具面
 
-14 个工具，每个都是「一个动作一组」，细节用 `catalog` 或工具说明查，不背签名：
+工具分两层：默认只挂 **8 个核心工具**，其余按需用 `catalog` 激活 —— 免得一份会话一上来
+就背 20 多个工具的 schema。（`SW_MCP_SURFACE=compact` 时只挂 `run` / `read` / `help` / `deliver`；
+`SW_MCP_TOOLS=inspect` 是只读实例，只挂指定的那几个。）
 
-| 工具 | 做什么 |
+**核心工具（8，默认就有）**
+
+| 工具 | 动作 | 做什么 |
+|---|---|---|
+| `catalog` | `list` / `activate` | 能力目录；按需激活下面那些 capability |
+| `model` | `plan` `build` `edit` `rebuild` `create` `undo` `pattern` `diff` | 零件建模主入口 |
+| `drawing` | `drawing` | 出工程图 |
+| `workspace` | `preflight` `brief` `projects` `project` `resume` `history` `read` `open` `search` `lesson` | 环境、项目与经验 |
+| `inspect` | `model` `faces` `bodies` `sketch` `figure` `measure` | 回读几何/质量属性/包围盒 |
+| `constraints` | `relations` `dimensions` | 草图约束与驱动尺寸 |
+| `capture` | — | 出图（iso/front/top/剖视），截图不是读数 |
+| `deliver` | — | 交付：按 `designId` 定位文档，活动文档不是目标也会自己激活/重开/重建 |
+
+**按需激活（`catalog action="activate" capability="<名字>"`）**
+
+| capability | 打开后得到 |
 |---|---|
-| `workspace` | 环境与文档：`preflight`、`status`、`open`/`close`/`release`、`cleanup`、`reap`、实例与通道 |
-| `model` | 零件：`plan` / `build` / `edit` / `rebuild` / `inspect` / `export` |
-| `assembly` | 装配：插组件、配合、位置、装配体结构 |
-| `constraints` | 草图与关系：关系审计、尺寸读写 |
-| `drawing` | 工程图：视图、标注、读图证据 |
-| `inspect` | 回读几何/质量属性/包围盒/方程，四态验收（pass / fail / unmeasured / blocked） |
-| `qa` | 交付前检查与图纸证据校验 |
-| `datum` | 基准面/轴/坐标系 |
-| `select` | 选择：`byId` / `byRay` / `byName`（选完会回读计数，「选完了」≠「选中了」） |
-| `deliver` | 存盘/导出：按 `designId` 定位文档，活动文档不是目标也会自己激活/重开/重建 |
-| `calculate` | 数值计算（与 SOLIDWORKS 无关的纯算） |
-| `analysis` | 3D 网格/截图分析 |
-| `job` | 把耗时操作提交成作业，拿 jobId 再取结果 |
-| `task` | 长任务的分步推进与状态登记 |
+| `assembly` | 装配动作：`assemble` `mate` `mateDelete` `mateLock` `componentLock` `componentRotate` `componentTranslate` `drive` |
+| `assembly_inspect` | `assembly` / `assemblyFaces` / `mates` |
+| `advanced_api` | 底层出口：`invoke` / `object` / `kinds` / `batch` |
+| `qa` | 验收与证据：`verify` / `evidence` / `review` / `snapshot` / `compare` |
+| `workspace_ops` | 实例与文档运维：`status` `instances` `reap` `ui` `reload` `cleanup` `reclaim` `closePath` `close` `quit` `logs` |
+| `datum` / `select` / `analysis` / `calculate` / `job` / `task` | 整工具按需打开（基准、选择、分析、计算、作业、长任务） |
 
-`run` / `read` / `help` 是 MCP 侧的辅助入口。
 
 ## 交付与验收
 
@@ -130,9 +138,11 @@ node test/definition-arg.mjs        # 离线：definition 传成 JSON 字符串�
 ## English
 
 A DeepSeek Harness preset that turns the harness into a SOLIDWORKS 2026 CAD operator.
-All SOLIDWORKS work goes through native single-step MCP tools (`workspace`, `model`,
-`assembly`, `constraints`, `drawing`, `inspect`, `qa`, `datum`, `select`, `deliver`,
-`calculate`, `analysis`, `job`, `task`) — one action per call, batches expressed as arrays.
+All SOLIDWORKS work goes through native single-step MCP tools — one action per call, batches
+expressed as arrays. Eight tools are registered by default (`catalog`, `model`, `drawing`,
+`workspace`, `inspect`, `constraints`, `capture`, `deliver`); assembly, advanced API, QA,
+instance ops, datum, select, analysis, calculate, job and task are opened on demand through
+`catalog action="activate" capability="<name>"`.
 Architecture: Node MCP server → C# `.NET Framework` bridge (`SwBridge.exe`) → SOLIDWORKS COM.
 Windows only; SOLIDWORKS 2026 must be installed locally; the bridge is compiled on the
 target machine (`bridge/build.ps1`), so no binaries are committed. Install:
