@@ -1287,7 +1287,7 @@ function capabilitiesPayload(sw) {
     version: {
       schemaVersion: 4,
       bridgeProtocolVersion: 4,
-      implementationVersion: '0.5.0',
+      implementationVersion: '0.6.0',
     },
     solidworks: sw ?? null,
     items: CAPABILITIES,
@@ -1349,7 +1349,7 @@ function designSummary(definition) {
 
 // --------------------------------------------------------------------------- 工具
 
-const server = new McpServer({ name: 'sw', version: '0.5.0' })
+const server = new McpServer({ name: 'sw', version: '0.6.0' })
 
 // 每个工具调用都过这里：拿到关联号、记时、记下参数摘要和结果。挂在这一层是
 // 因为工具分散在四个模块里，逐个手写日志一定会漏；而这里漏不掉。
@@ -6949,7 +6949,7 @@ if (COMPACT_MCP) {
 
 const transport = new StdioServerTransport()
 pruneLogs()
-writeEvent({ level: 'info', tool: 'server', message: 'started', version: '0.5.0', logDir: LOG_DIR })
+writeEvent({ level: 'info', tool: 'server', message: 'started', version: '0.6.0', logDir: LOG_DIR })
 await server.connect(transport)
 
 process.on('SIGINT', () => {

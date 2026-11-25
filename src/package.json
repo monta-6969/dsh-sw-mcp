@@ -1,11 +1,12 @@
 {
   "name": "@local/dsh-sw-preset",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "private": true,
-  "description": "SOLIDWORKS 自动化预设（两个）：sw建模自动化 管零件与图纸，sw装配体自动化 管装配与配合。一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；workspace preflight、plan/build/edit、装配与配合、inspect/qa 验收、交付前程序化检查；能力目录、跨进程写锁、四态验收与图纸证据校验。",
+  "description": "SOLIDWORKS 自动化预设（两个）：sw建模自动化 管零件与图纸，sw装配体自动化 管装配与配合。一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；workspace preflight、plan/build/edit、装配与配合、inspect/qa 验收、交付前程序化检查；能力目录、跨进程写锁、四态验收与图纸证据校验；附带交付件的 3D 预览与面/边/点拾取面板。",
   "type": "module",
   "license": "MIT",
   "author": "monta-6969",
+  "icon": "./assets/icon-180.png",
   "homepage": "https://github.com/monta-6969/dsh-sw-mcp",
   "repository": {
     "type": "git",
@@ -22,13 +23,17 @@
     "cad",
     "mcp",
     "csharp-bridge",
-    "com"
+    "com",
+    "3d-preview",
+    "step",
+    "stl"
   ],
   "os": [
     "win32"
   ],
   "engines": {
-    "node": ">=20"
+    "node": ">=20",
+    "dsh": ">=0.2.1-rc.3 <0.3.0-0"
   },
   "exports": {
     "./cordis.patch.yml": "./cordis.patch.yml",
@@ -38,12 +43,22 @@
     "./preset/experience-nudge.js": "./preset/experience-nudge.js",
     "./preset/experience-digest.js": "./preset/experience-digest.js",
     "./preset/review-gate.js": "./preset/review-gate.js",
+    "./preview/index.js": "./preview/index.js",
+    "./preview/client.js": "./preview/client.js",
     "./server/server.mjs": "./server/server.mjs",
     "./package.json": "./package.json"
   },
   "dsh": {
+    "manifestVersion": 1,
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview"
+      ]
     }
   },
   "dependencies": {
@@ -59,6 +74,7 @@
   "files": [
     "cordis.patch.yml",
     "preset",
+    "preview",
     "server",
     "skills",
     "bridge/src",
@@ -70,6 +86,7 @@
     "examples",
     "drawings",
     "tools",
+    "assets",
     "install.ps1",
     "LICENSE",
     "README.md",

@@ -7,14 +7,16 @@ DeepSeek Harness（dsh）的 SOLIDWORKS 2026 自动化预设。装好后模式�
 | **sw建模自动化** | `sw-native` | 零件与图纸：读图 → 规划 → 建模 → 回读 → 验收 → 交付 |
 | **sw装配体自动化** | `sw-assembly` | 装配与配合：零件先落盘 → 组装 → 逐条配合 → 复查 → 驱动 → 交付 |
 
-两个预设共用同一份 MCP 服务与工具面，差别只在人设与默认动作。
+两个预设共用同一份 MCP 服务与工具面，差别只在人设与默认动作。同一个插件条目还带一块
+**3D 预览面板**：`deliver` 出的 STEP/STL/OBJ 直接在 DSH 文件预览里打开，能拾取面/边/点
+并生成坐标交接单交回模型改。
 
 目录只有三项，其它全在 `src/`：
 
 ```
 dsh-sw建模自动化/
 ├─ README.md      ← 这一份
-├─ src/           ← 全部源码与配置（git 仓库内容）
+├─ src/           ← 全部源码与配置（git 仓库内容，含 preview\ 3D 面板）
 └─ local/         ← 本机产物，不入库：bridge-bin/（SwBridge.exe + interop 程序集）、日志、输出
 ```
 
@@ -49,6 +51,9 @@ dsh-sw建模自动化/
 - **具名失败语义**：`DESIGN_ID_REQUIRED`、`DOC_NOT_OPEN`、`DIMENSION_NOT_DRIVING`（加的是
   reference 尺寸）、`SKETCH_NOT_EDITABLE`（没进编辑模式）、`SELECTION_EMPTY`（选完了 ≠
   选中了），每条都带 `nextActions`。
+- **3D 预览与拾取**（`src/preview/`，原来是独立插件 `dsh-sw-3d-preview` 0.2.2，已并进本包）：
+  预览面板画 STEP/STL/OBJ，拾取面/边/点生成坐标交接单；外部进程可用 `extToken` 走
+  `/sw3d/*`（默认关闭）。
 - **6 份现场知识**（`src/skills/`）：原生配方、绘图基础、读图、参数化、装环境、排错。
 - 契约与分派表（`src/contracts/`）、示例设计（`src/examples/`、`src/drawings/`）、测试套（`src/test/`）。
 

@@ -65,9 +65,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: 'C:\Program Files\nodejs\node.exe'
+              command: '<node.exe>'
               args:
-                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
+                - '<repo>/server/server.mjs'
               # 默认走共享 broker：重操作提交给常驻实例 worker，首调用可自动拉起 SW。
               # 单元测试直接 spawn server.mjs，不经过这里，仍是直连路径。
               env:
@@ -172,9 +172,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: 'C:\Program Files\nodejs\node.exe'
+              command: '<node.exe>'
               args:
-                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
+                - '<repo>/server/server.mjs'
               env:
                 SW_MCP_BROKER: '1'
                 SW_MCP_BROKER_ENSURE: '1'
@@ -227,3 +227,15 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+
+# 3D 预览与拾取面板（原独立插件 dsh-sw-3d-preview 0.2.2，已并进本包 preview/）。
+# 只有这一行 Host 插件；客户端渲染由 package.json 的 dsh.client 指向 ./preview/client.js
+# （拆成两行会让「关掉那一行」时界面还在、接口却 404，所以不要再单独插 Host 行）。
+# config 可整段删掉 = 全部取默认值 = 外部访问关闭。extToken 是长期凭据：
+# 只填在本机 profile 的 patch 层，不要提交到仓库。
+- insert:
+    - id: sw-3d-preview
+      name: '@local/dsh-sw-preset/preview/index.js'
+      config:
+        extToken: ''
+        extTokenScopes: ['read']
