@@ -65,9 +65,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: '<node.exe>'
+              command: 'C:\Program Files\nodejs\node.exe'
               args:
-                - '<repo>/server/server.mjs'
+                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
               # 默认走共享 broker：重操作提交给常驻实例 worker，首调用可自动拉起 SW。
               # 单元测试直接 spawn server.mjs，不经过这里，仍是直连路径。
               env:
@@ -172,9 +172,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: '<node.exe>'
+              command: 'C:\Program Files\nodejs\node.exe'
               args:
-                - '<repo>/server/server.mjs'
+                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
               env:
                 SW_MCP_BROKER: '1'
                 SW_MCP_BROKER_ENSURE: '1'
