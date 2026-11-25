@@ -1,7 +1,0 @@
-{
-  "schemaVersion": 3, "units": "mm",
-  "features": [
-    {"kind":"sketch","id":"a","plane":1,"primitives":[{"shape":"roundedRect","center":[0,6.7],"width":20.2,"height":13.4,"radius":3.4,"sharp":[2,3]}]},
-    {"kind":"extrude","id":"b","profile":"a","depth":3.4}
-  ]
-}

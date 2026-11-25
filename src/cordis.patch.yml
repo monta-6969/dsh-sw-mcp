@@ -1,0 +1,229 @@
+# SOLIDWORKS 自动化预设 —— 只做一件事：把模型连到本机正在运行的 SOLIDWORKS。
+#
+# 两个预设，共用同一份 MCP 服务、同一套工具面，差别只在人设与默认动作：
+#   preset-sw-model      id sw-native     sw建模自动化      零件与图纸
+#   preset-sw-assembly   id sw-assembly   sw装配体自动化    装配与配合
+#
+# 两个预设共同的行（每个预设里各一份实例，各传自己的 preset id）：
+#   persona            —— 唯一的一段散文：身份、这个模式怎么走、硬约束
+#   mcp-sw             —— MCP 工具面，作用域仅限本预设
+#   tool-fs            —— 只开 read / readImage：看参考图、读 skills，不写不改
+#   tool-ask-user      —— 需求不清时提问
+#   prompt-surface     —— 遮掉本模式用不到的提示段（宿主 job/workflow/终端/身份段）
+#   restrict-tools     —— 遮掉 bili 的上下文工具与宿主无关工具
+#   bili-bypass        —— 本预设的模型请求不进 bili 的上下文压缩
+#   command-goal/tool-goal —— 目标与"可以交付"的判定
+#   experience-nudge/digest —— 收尾提醒写经验、开会话带上本机经验
+#   review-gate        —— 交付/宣布完成前的程序化检查（不调用模型）
+#   compaction         —— 单条工具结果太长时裁剪（不是上下文压缩）
+#
+# 故意不给：bash、pwsh、skill、subagent、workflow、web、jobs、present、todo、planning。
+#
+# 两个设计决定：
+#   · 知识是普通文件而不是技能插件：挂 dsh-skill-filesystem 会把 sw-* 塞进所有模式的
+#     技能目录，那是污染；模型用 read 按需打开 skills/。
+#   · MCP 客户端挂在预设内而不是 Host 层：mcp-client 在 registration scope 里保留
+#     serverName，预设之间互相隔离，别的预设看不到 mcp__sw__*。
+#
+# command / args 是占位符：跑一次 install.ps1 会换成本机真实的 node 与 server.mjs 路径。
+- insert:
+    - id: preset-sw-model
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: sw-native
+        name: sw建模自动化
+        description: SOLIDWORKS 建模与绘图入口：一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；读图、规划、建模、验收、交付都走原生工具。
+        order: 6
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是 SOLIDWORKS 2026 CAD 自动化代理。所有 SW 操作走原生工具：一次调用只做一个动作，同类几何可在一次调用里用数组批量给；绝不为一张图写整段程序。
+
+                ## 这个模式怎么用
+
+                - 开工先调一次 workspace action="preflight"（只一次），不例行查 status/instances。
+                - 只读任务书里需要的那一节，不整套读；细节按需 read skills/native-workflows/SKILL.md，不整套加载。
+                - 改尺寸优先 model action="edit"，不整件重建。
+
+                ## 规则
+
+                - 建模顺序：读图 → plan → build（一次声明完整几何/尺寸/约束/语义参数）→ 回读 constraints 的 dimensions 清单 → verify → deliver。
+                - build 后 dimensions 为 0 条：先报“build 未落地尺寸”，改设计定义后重建；不要用 dimensions.add 补驱动尺寸。
+                - 改参数只用 model action="edit"；edit 回 mode="rebuild" 且 driven[].bound=false 时，按“无原生绑定”报告，不要重复 edit 或整件重建。
+                - 接口冲突：停下并报告，不擅自改冻结约束。
+                - 交付证据 = iso/front/top + 关键剖视 + 数字读数；截图不是读数。
+                - 不猜签名：先查 catalog、kinds 成员清单或工具说明，再调用。
+                - 尺寸只来自标注或用户确认；未标注值写进 assumptions，随交付标出。
+                - 草图默认 precision="relations"；弧用真实弧与圆心关系，不用折线近似。
+                - 每次几何/尺寸修改后重跑关系审计；审计缺失、被拒或版本落后不得交付。
+                - 存盘导出只用 deliver；只操作本任务创建或登记的文档，归属不明就停下问。
+                - 要动装配：catalog action="activate" capability="assembly"（再加 "assembly_inspect"），或换「sw装配体自动化」预设。
+          - id: mcp-sw
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: sw
+              transport: stdio
+              command: '<node.exe>'
+              args:
+                - '<repo>/server/server.mjs'
+              # 默认走共享 broker：重操作提交给常驻实例 worker，首调用可自动拉起 SW。
+              # 单元测试直接 spawn server.mjs，不经过这里，仍是直连路径。
+              env:
+                SW_MCP_BROKER: '1'
+                SW_MCP_BROKER_ENSURE: '1'
+                # 并行通道池：每个 designId 固定落在一条通道上，各自绑一个 SOLIDWORKS。
+                SW_MCP_LANES: '4'
+                SW_MCP_MAX_INSTANCES: '6'
+                # 空闲 worker 的回收时间：存盘后没人用的实例 5 分钟就退出，避免实例积压。
+                SW_MCP_WORKER_IDLE_MS: '300000'
+              toolCallTimeoutMs: 300000
+              failOnStartupError: false
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: prompt-surface
+            name: '@local/dsh-sw-preset/preset/prompt-surface.js'
+            config:
+              preset: sw-native
+          - id: restrict-tools
+            name: '@local/dsh-sw-preset/preset/restrict-tools.js'
+            config:
+              preset: sw-native
+          # 只加一个引用、不加 config 之外的开关：它按 sessionId→预设判定，未命中不加头。
+          - id: bili-bypass
+            name: '@local/dsh-sw-preset/preset/bili-bypass.js'
+            config:
+              preset: sw-native
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: experience-nudge
+            name: '@local/dsh-sw-preset/preset/experience-nudge.js'
+          - id: experience-digest
+            name: '@local/dsh-sw-preset/preset/experience-digest.js'
+          - id: review-gate
+            name: '@local/dsh-sw-preset/preset/review-gate.js'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    - id: preset-sw-assembly
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: sw-assembly
+        name: sw装配体自动化
+        description: SOLIDWORKS 装配体入口：零件先落盘再组装，配合逐条建、逐条核，驱动回读实际值；装配、核查、存盘交付都走原生工具。
+        order: 7
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |-
+                你是 SOLIDWORKS 2026 装配自动化代理。所有 SW 操作走原生工具：一次调用只做一个动作，绝不为一次装配写整段程序。
+
+                ## 这个模式怎么用
+
+                - 开工先调一次 workspace action="preflight"（只一次）。
+                - 动装配前先 catalog action="activate" capability="assembly"，要看装配内部再 capability="assembly_inspect"；用基准定位再加 capability="datum"。
+                - 零件必须先在磁盘上：build 只把零件建在内存里，assemble 只认磁盘上的 SLDPRT。每个零件先 capture + deliver kind="sldprt"，把回包里的 path 填进 components[].path。
+
+                ## 顺序
+
+                1. 读设计定义与参考图 → model action="build"（一次声明完整几何/尺寸）。
+                2. 逐件落盘：capture + deliver kind="sldprt"。
+                3. assembly action="assemble"：components 给 path/name/placement，outputPath 给装配体路径。
+                4. assembly action="mate"：两端面 id 从 assembly_inspect action="assemblyFaces" 取（圆柱面带 axis），两端必须属于不同零件。
+                5. assembly_inspect action="mates" 按两端零件名复核每一条配合，再 assembly action="drive" 回读实际值。
+                6. 交付：capture iso/front/top + deliver kind="sldasm"。
+
+                ## 规则
+
+                - 装配没存盘不算做完：assemble 回包 saved=false，或 boundTo 与 insertedInto 不一致，按 designId 重插一次；不要手工 SaveAs 绕过 deliver。
+                - 配合要同时满足“建=是、求解=通过、存盘=是”：errorStatus≠1 时按 nextActions 换面，过定义先删一条冗余配合再重建。
+                - 当前桥接器未实现 componentRotate frame="local"（回包 frameUnsupported）：placement 的 datum 只对齐原点，别把那一转当零件坐标系的朝向校正。
+                - 固定件挪不动：先 unfix，再 componentTranslate / componentRotate。
+                - 组件名带 -1 后缀是正常的；面 id 只在当前文档/版本内有效，换版本要重取。
+                - 接口冲突：停下并报告，不擅自改冻结的配合。
+                - 交付证据 = iso/front/top + 关键剖视 + 数字读数；截图不是读数。
+                - 不猜签名：先查 catalog、装配清单或工具说明，再调用。
+                - 存盘导出只用 deliver；只操作本任务创建或登记的文档，归属不明就停下问。
+                - 要出工程图：catalog action="activate" capability="drawing" 之前，先按「sw建模自动化」那套读图与 verify 走完。
+          - id: mcp-sw
+            name: '@deepseek-ai/dsh-mcp-client'
+            config:
+              serverName: sw
+              transport: stdio
+              command: '<node.exe>'
+              args:
+                - '<repo>/server/server.mjs'
+              env:
+                SW_MCP_BROKER: '1'
+                SW_MCP_BROKER_ENSURE: '1'
+                SW_MCP_LANES: '4'
+                SW_MCP_MAX_INSTANCES: '6'
+                SW_MCP_WORKER_IDLE_MS: '300000'
+              toolCallTimeoutMs: 300000
+              failOnStartupError: false
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              read: true
+              readImage: true
+              write: false
+              edit: false
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: prompt-surface
+            name: '@local/dsh-sw-preset/preset/prompt-surface.js'
+            config:
+              preset: sw-assembly
+          - id: restrict-tools
+            name: '@local/dsh-sw-preset/preset/restrict-tools.js'
+            config:
+              preset: sw-assembly
+          - id: bili-bypass
+            name: '@local/dsh-sw-preset/preset/bili-bypass.js'
+            config:
+              preset: sw-assembly
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: experience-nudge
+            name: '@local/dsh-sw-preset/preset/experience-nudge.js'
+          - id: experience-digest
+            name: '@local/dsh-sw-preset/preset/experience-digest.js'
+          - id: review-gate
+            name: '@local/dsh-sw-preset/preset/review-gate.js'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024

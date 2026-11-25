@@ -1,8 +1,14 @@
+# 本机目录：编译产物、日志、临时输出，一律不入库
+local/
+
 # 依赖
 node_modules/
 
 # 本机编译产物：interop 程序集来自本机 SOLIDWORKS 安装目录，跨机器拷贝必然崩
-# （Generate: bridge/build.ps1 会在目标机重新编译并发布 SwBridge.exe）
+# （src/bridge/build.ps1 会在目标机重新编译并发布 SwBridge.exe）
+# src/bridge/bin 是指向 local/bridge-bin 的本机链接；两种写法都写上，
+# 因为带结尾斜杠的规则匹配不到链接本身，只写它会把 exe 一起提交上去。
+**/bridge/bin
 bridge/bin/
 
 # 开发期备份、审查记录、调试日志
@@ -26,8 +32,6 @@ _req_comp.json
 test/out/
 test/.state/
 test/*.exe
-# 齿轮例子的开发期探针与中间产物（含本机路径，不属于产品）
-test/gear/
 
 # Python 字节码与虚拟环境
 .venv/
@@ -38,5 +42,3 @@ __pycache__/
 # 仓库里存的是模板，install.ps1 会把它改成本机真实路径。
 # 这里不做 ignore：模板必须能被别人 clone 到，改完的差异由使用者自行处理。
 
-# 个人工作产物（工具能力笔记），不属于插件源码
-成果/

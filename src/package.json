@@ -1,0 +1,78 @@
+{
+  "name": "@local/dsh-sw-preset",
+  "version": "0.5.0",
+  "private": true,
+  "description": "SOLIDWORKS 自动化预设（两个）：sw建模自动化 管零件与图纸，sw装配体自动化 管装配与配合。一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；workspace preflight、plan/build/edit、装配与配合、inspect/qa 验收、交付前程序化检查；能力目录、跨进程写锁、四态验收与图纸证据校验。",
+  "type": "module",
+  "license": "MIT",
+  "author": "monta-6969",
+  "homepage": "https://github.com/monta-6969/dsh-sw-mcp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/monta-6969/dsh-sw-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/monta-6969/dsh-sw-mcp/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "solidworks",
+    "cad",
+    "mcp",
+    "csharp-bridge",
+    "com"
+  ],
+  "os": [
+    "win32"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./preset/prompt-surface.js": "./preset/prompt-surface.js",
+    "./preset/restrict-tools.js": "./preset/restrict-tools.js",
+    "./preset/bili-bypass.js": "./preset/bili-bypass.js",
+    "./preset/experience-nudge.js": "./preset/experience-nudge.js",
+    "./preset/experience-digest.js": "./preset/experience-digest.js",
+    "./preset/review-gate.js": "./preset/review-gate.js",
+    "./server/server.mjs": "./server/server.mjs",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/server": "2.2.0",
+    "zod": "4.6.7"
+  },
+  "scripts": {
+    "build": "powershell -ExecutionPolicy Bypass -File bridge/build.ps1",
+    "test": "node test/suite.mjs",
+    "test:preset": "node test/presets.mjs",
+    "test:one": "node test/m6.mjs"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "preset",
+    "server",
+    "skills",
+    "bridge/src",
+    "bridge/build.ps1",
+    "bridge/bin/SwBridge.exe",
+    "bridge/bin/SolidWorks.Interop.sldworks.dll",
+    "bridge/bin/SolidWorks.Interop.swconst.dll",
+    "contracts",
+    "examples",
+    "drawings",
+    "tools",
+    "install.ps1",
+    "LICENSE",
+    "README.md",
+    "package.json"
+  ]
+}
