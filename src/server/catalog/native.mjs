@@ -735,7 +735,7 @@ export const NATIVE_OPS = [
   {
     id: 'model.gear',
     title: '齿轮（原生齿形）',
-    summary: '按模数/齿数/压力角生成直齿轮：圆柱 + 一个齿槽切除 + 原生圆周阵列。build 的 primitives 写 {shape:"gear", teeth, module, pressureAngle}；中心孔另用 cut + circle。齿轮不要先跑 model action=plan（plan 会把生成的齿槽草图误判成坐标草稿）。',
+    summary: '按模数/齿数/压力角生成直齿轮：圆柱 + 一个齿槽切除 + 原生圆周阵列。build 的 primitives 写 {shape:"gear", teeth, module, pressureAngle}；中心孔另用 cut + circle。齿轮不要先跑 model action=plan（plan 会把生成的齿槽草图误判成坐标草稿）。锥齿/螺旋齿参数（bevel/coneAngle/faceWidth/helixAngle）会被明确拒绝（UNSUPPORTED_PARAM），不会生成一只看起来对的直齿轮。',
     schema: {
       type: 'object',
       properties: {

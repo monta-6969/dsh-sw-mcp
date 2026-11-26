@@ -345,6 +345,8 @@
 | `componentRotate frame="local"` | missing | 只用 global/显式旋转点；标 `frame_fallback` |
 | 装配 DOF/干涉读数 | degraded/missing | `assembly_inspect` + `measure`；标 `unmeasured` |
 | `helix` / `sweep` / `loft` | **available** | `build` 的定义里或 `model action="helix"|"sweep"|"loft"`；配方见 N11/N12 |
+| 锥齿 `bevel`/`coneAngle`/`faceWidth` | missing（明确报错） | `gear` 基元收到这些键 → `UNSUPPORTED_PARAM`；直齿轮不会冒充锥齿。要锥齿先做「背锥展开 + 大小端放样」，见 N12 |
+| 螺旋齿 `helixAngle` | missing（明确报错） | 同上；齿面螺旋线作引导线还没接 |
 | 螺旋导程读数 | **available** | `inspect action="measure" measure={kind:"helix"}`（沿螺旋边采样回归，不读输入参数） |
 | `chamfer` | missing | 保留尖边或切除等效；标 `tool_gap` |
 | `shell` | missing | 外轮廓拉伸 + 内腔切除 |

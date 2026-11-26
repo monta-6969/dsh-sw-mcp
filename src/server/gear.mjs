@@ -240,6 +240,48 @@ export function nativeGearDefinition(spec = {}) {
   }
 }
 
+/** gear 基元认识的键。不在这张表里的键一律失败，不静默忽略。 */
+export const GEAR_KEY_WHITELIST = [
+  'shape', 'id', 'name',
+  'teeth', 'module', 'pressureAngle', 'backlash', 'samples',
+  'native', 'depth', 'plane', 'axisPlanes',
+]
+
+/** 认了但还没实现的参数。它们不是"可忽略的装饰"，是整只齿轮的形状定义。 */
+export const GEAR_UNSUPPORTED_KEYS = [
+  'bevel', 'coneAngle', 'faceWidth', 'shaftAngle', 'pitchAngle',
+  'helixAngle', 'spiralAngle', 'handedness', 'cutterDirection',
+]
+
+/**
+ * 齿轮基元的参数闸门。三个失败码分工：
+ *   UNSUPPORTED_PARAM      —— 锥齿/螺旋齿这类整只齿轮的形状还不支持（本函数）
+ *   GEAR_NATIVE_REQUIRED   —— 想走折线拟合（expandGearPrimitives）
+ *   GEAR_COMBINATION_UNSUPPORTED —— 齿轮与其它特征混在一个定义里（expandNativeGear）
+ * 之所以在 Node 侧拦：这些键进了桥接器只会被 `spec.teeth/module` 读出，
+ * 其余无声丢弃，回包照样 ok —— 那就是"接受但不动"。
+ */
+export function assertGearSpecs(definition) {
+  for (const spec of gearSpecs(definition)) {
+    const unsupported = GEAR_UNSUPPORTED_KEYS.filter((key) => spec[key] !== undefined && spec[key] !== null)
+    if (unsupported.length > 0) {
+      throw new Error(
+        `UNSUPPORTED_PARAM: gear 基元收到了 ${unsupported.join('/')}（${JSON.stringify(spec)}）。`
+        + '直齿轮实现只认齿数/模数/压力角；锥齿轮要走「背锥展开渐开线（带 1/cosδ 齿厚）→ 大端/小端放样」，'
+        + '螺旋齿要走「齿面螺旋线作引导线」。这些还没实现，所以这里直接失败，不给你一只看起来对、量起来不对的直齿轮。',
+      )
+    }
+    const unknown = Object.keys(spec).filter((key) => !GEAR_KEY_WHITELIST.includes(key))
+    if (unknown.length > 0) {
+      throw new Error(
+        `UNSUPPORTED_PARAM: gear 基元不认识 ${unknown.join('/')}（收到 ${JSON.stringify(spec)}）；`
+        + `已知的有 ${GEAR_KEY_WHITELIST.join('/')}。拼错/多写的参数不会生效，所以这里直接失败。`,
+      )
+    }
+  }
+  return definition
+}
+
 /** 定义里有没有要求原生齿形（gear 基元 + native:true）。 */
 export function hasNativeGear(definition) {
   // 只有显式 native:false 才走旧路径；默认必须原生。折线拟合已经被禁止。
@@ -250,6 +292,7 @@ export function hasNativeGear(definition) {
  *  返回 null 表示不需要展开。 */
 export function expandNativeGear(definition) {
   if (!hasNativeGear(definition)) return null
+  assertGearSpecs(definition)
   const specs = gearSpecs(definition)
   if (specs.length !== 1) {
     throw new Error(`GEAR_COMBINATION_UNSUPPORTED: 一个定义只能有一个 gear 基元（当前 ${specs.length} 个），多齿轮请分成独立零件`)
