@@ -1,0 +1,44 @@
+{
+  "schema": 1,
+  "partId": "worm-1795677567638",
+  "designId": "worm-helical-1795677521668",
+  "revision": 1,
+  "designHash": "sha256:e9aad2bd25ae88335cc0f378dc0a38b307fe2a3f2a0dbfe38737606810712afb",
+  "status": "compiled",
+  "compiledAt": "2026-11-26T07:19:32.167Z",
+  "cad": {
+    "path": "C:\\Users\\mota\\Desktop\\工程自动化\\插件\\dsh-sw建模自动化\\src\\test\\out\\worm-1795677567638.SLDPRT",
+    "bytes": 465060,
+    "sha256": "sha256:2d75c18f3067a5ba70cba6324d70e2ba50f8bb5815694335120917cec1b9a401"
+  },
+  "features": [],
+  "bindings": {},
+  "dimensionBindings": {},
+  "drivers": {
+    "mode": "literal",
+    "accepted": 0,
+    "appliedLiteral": 0,
+    "requested": 0,
+    "note": "this instance refused every equation binding, so parameter values are baked into the geometry at build; edit parameters rebuilds the part from the definition"
+  },
+  "sw": {
+    "bodies": 1,
+    "faces": 8,
+    "volume_mm3": 4589.0864,
+    "mass_g": 36.024,
+    "massBasis": "设计定义未声明密度；按结构钢 7.85 g/cm³ 计算",
+    "bbox_mm": [
+      16,
+      16,
+      30
+    ],
+    "saved_at": "2026-11-26T07:19:28.893Z",
+    "reopened_at": "2026-11-26T07:19:32.164Z",
+    "volume_before_save_mm3": 4589.0864,
+    "volume_after_reopen_mm3": 4589.0864,
+    "delta_pct": 0,
+    "density_g_cm3": 7.85,
+    "readback": "close-open",
+    "readbackPath": "C:\\Users\\mota\\Desktop\\工程自动化\\插件\\dsh-sw建模自动化\\src\\test\\out\\worm-1795677567638.SLDPRT"
+  }
+}

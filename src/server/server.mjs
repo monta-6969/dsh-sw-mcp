@@ -6548,7 +6548,7 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
 
 /** design.json 是唯一真源：交付成功时把它落到 CAD 旁边，并把这一版期望值一起记下。
  *  之后 edit / inspect verify 的 tiers 都读它；SLDPRT 只是编译产物。 */
-async function writeDeliveryContract({ designId, project, path, measuredShape, rebuilt }) {
+async function writeDeliveryContract({ designId, project, path, measuredShape, rebuilt, sw = null }) {
   if (!project?.definition) return null
   const shape = measuredShape ?? {}
   const previous = readContract(path)
@@ -6571,6 +6571,7 @@ async function writeDeliveryContract({ designId, project, path, measuredShape, r
     bindings: rebuilt?.bindings ?? project.bindings ?? {},
     dimensionBindings: rebuilt?.dimensionBindings ?? project.dimensionBindings ?? {},
     drivers: rebuilt?.drivers ?? project.drivers ?? null,
+    sw,
   })
   writeJsonAtomic(designFileFor(path), design)
   writeJsonAtomic(manifestFileFor(path), manifest)
@@ -6626,6 +6627,70 @@ function deliverFailure({ designId, targetPath, started, route, error, nextActio
   })
 }
 
+/** 交付时写进 manifest 的 sw 块（回读证据）。
+ *
+ * 为什么必须是回读而不是"构建时那组数"：manifest 是下游证据链的输入，实体数/体积/
+ * 面数写 null 却回 ok 时，下游按「sw 块有没有数据」立的规则会把几何完全正确的件
+ * 判成退回 —— 实测已经退回两件。所以这里只接受 close→open 之后的读数，拿不到就
+ * 让 deliver 失败（MISSING_READBACK），绝不写 null 然后报成功。
+ *
+ * 质量按设计定义里声明的密度算；没声明就用结构钢 7.85 g/cm³，并把依据写进
+ * massBasis —— 默认值可以存在，但必须可审计，不能假装是材料数据。
+ */
+const DEFAULT_DENSITY_G_CM3 = 7.85
+function buildSwReadback({ project, readback, savedAt, reopenedAt }) {
+  const missing = (what) => ({ error: fail('MISSING_READBACK',
+    `deliver 无法写出 manifest 的 sw 块：${what}。交付要求「关掉重开后的实体/体积读数」，`
+    + '拿不到就把交付判失败，而不是写 null 再报成功。',
+    { missing: what, readbackSkipped: readback?.skipped ?? null, readbackError: readback?.error ?? null }) })
+
+  if (!readback || readback.reopened !== true) {
+    return missing(readback?.skipped
+      ? `保存后没能关掉重开（${readback.skipped}）`
+      : `保存后重开回读失败（${readback?.error?.code ?? 'UNKNOWN'}）`)
+  }
+  const shape = readback.geometry ?? {}
+  const bodies = Number.isFinite(shape.bodies) ? shape.bodies : null
+  const faces = Number.isFinite(shape.faces) ? shape.faces : null
+  const volumeAfter = Number.isFinite(shape.massProperties?.volume) ? shape.massProperties.volume : null
+  const bbox = Array.isArray(shape.boundingBox?.size) ? shape.boundingBox.size : null
+  if (bodies === null) return missing('重开后没有实体数（bodies）')
+  if (volumeAfter === null) return missing('重开后没有体积（massProperties.volume）')
+
+  const declared = project?.definition?.material?.density_g_cm3
+    ?? project?.definition?.material?.density
+    ?? project?.definition?.density_g_cm3
+  const declaredNumber = Number(declared)
+  const density = Number.isFinite(declaredNumber) && declaredNumber > 0 ? declaredNumber : DEFAULT_DENSITY_G_CM3
+  const massBasis = Number.isFinite(declaredNumber) && declaredNumber > 0
+    ? `design.definition.material.density_g_cm3=${declaredNumber}`
+    : `设计定义未声明密度；按结构钢 ${DEFAULT_DENSITY_G_CM3} g/cm³ 计算`
+
+  // 保存前的体积来自构建记录；没有记录时用回读值并说明依据（不编一个 delta）。
+  const beforeRaw = Number(project?.measurements?.volume)
+  const volumeBefore = Number.isFinite(beforeRaw) && beforeRaw > 0 ? beforeRaw : volumeAfter
+  const deltaPct = volumeBefore > 0 ? Number((((volumeAfter - volumeBefore) / volumeBefore) * 100).toFixed(4)) : 0
+
+  return {
+    block: {
+      bodies,
+      faces,
+      volume_mm3: volumeAfter,
+      mass_g: Number(((volumeAfter / 1000) * density).toFixed(3)),
+      massBasis,
+      bbox_mm: bbox,
+      saved_at: savedAt,
+      reopened_at: reopenedAt,
+      volume_before_save_mm3: volumeBefore,
+      volume_after_reopen_mm3: volumeAfter,
+      delta_pct: deltaPct,
+      density_g_cm3: density,
+      readback: 'close-open',
+      readbackPath: readback.path ?? null,
+    },
+  }
+}
+
 async function deliverPartFile({ designId, path: targetPath, started }) {
   if (activeBuildDesigns.has(designId)) {
     return deliverFailure({
@@ -6675,6 +6740,7 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
 
     const savedResult = outcome.saved ?? {}
     const wrote = savedResult.saved === true
+    const savedAt = new Date().toISOString()
     const fileCheck = checkDeliveredFile(targetPath, 'sldprt', savedResult.bytes)
 
     // 保存后回读：关掉重开，实体数（装配：组件数）> 0 才算交付。
@@ -6685,11 +6751,17 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       readback = await verifyDeliveredPartFile({ designId, targetPath, project: projectNow })
       judgement = judgeReopenedDocument({ kind: readback.kind, bodies: readback.bodies, components: readback.components })
     }
+    const reopenedAt = readback?.reopened === true ? new Date().toISOString() : null
+    // manifest 的 sw 块：要么是重开后的回读，要么交付失败。
+    let swReadback = null
+    if (wrote && fileCheck.ok) {
+      swReadback = buildSwReadback({ project: readProject(designId), readback, savedAt, reopenedAt })
+    }
     // 字节数回读放在重开之后：回读过程不写文件，但它才是「交付那一刻磁盘上的事实」。
     let fileStat = null
     try { fileStat = statSync(targetPath) } catch { fileStat = null }
     const bytes = fileStat?.size ?? (Number.isFinite(savedResult.bytes) ? savedResult.bytes : 0)
-    const verified = wrote && fileCheck.ok && judgement.ok === true
+    const verified = wrote && fileCheck.ok && judgement.ok === true && swReadback?.block != null
 
     if (wrote && fileCheck.ok) {
       // 只有存成 .sldprt 才让文档变成「已存盘」：账本立刻销掉，之后的清扫绝不能再碰
@@ -6697,16 +6769,20 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       sessionDocs.delete(designId)
     }
     let designStore = null
-    if (wrote && fileCheck.ok) {
+    if (wrote && fileCheck.ok && swReadback?.block) {
       try {
         const projectNow = readProject(designId)
         designStore = await writeDeliveryContract({
           designId, project: projectNow, path: targetPath,
           measuredShape: readback?.geometry ?? null, rebuilt: outcome.rebuilt,
+          sw: swReadback.block,
         })
       } catch (error) {
         designStore = { skipped: true, reason: error?.message ?? String(error) }
       }
+    } else if (swReadback?.error) {
+      // 不写 design.json/manifest：一份 sw 为 null 的 manifest 比没有 manifest 更坏。
+      designStore = { skipped: true, reason: swReadback.error.code, message: swReadback.error.message }
     }
     {
       // artifacts 记账失败不能把"文件已写出"变成"交付失败"。
@@ -6742,6 +6818,8 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       judgement,
       readback,
       designStore,
+      sw: swReadback?.block ?? null,
+      swError: swReadback?.error ? { code: swReadback.error.code, message: swReadback.error.message } : null,
     }
     const activation = {
       active: readback?.reopened === true || (readback?.title !== null && readback?.title !== undefined),
@@ -6756,11 +6834,40 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
     }
     const summary = verified
       ? `已交付 ${designId} → ${targetPath}（${bytes} 字节；source=${route.source}；重开后 ${judgement.metric}=${judgement.value}）`
-      : wrote && fileCheck.ok
-        ? `已写出 ${targetPath}（${bytes} 字节），但重开回读没通过：${readback?.error?.message ?? judgement.reason}`
-        : wrote
-          ? `已写出 ${targetPath}，但文件自检不通过：${fileCheck.failed.join('、')}`
-          : `写出失败：SOLIDWORKS 返回 errors=${savedResult.errors}`
+      : swReadback?.error
+        ? `已写出 ${targetPath}（${bytes} 字节），但 manifest 的 sw 块拿不到回读：${swReadback.error.message}`
+        : wrote && fileCheck.ok
+          ? `已写出 ${targetPath}（${bytes} 字节），但重开回读没通过：${readback?.error?.message ?? judgement.reason}`
+          : wrote
+            ? `已写出 ${targetPath}，但文件自检不通过：${fileCheck.failed.join('、')}`
+            : `写出失败：SOLIDWORKS 返回 errors=${savedResult.errors}`
+
+    // sw 块拿不到 = 交付失败。文件可能已经写出去了（写出去收不回），但绝不能
+    // 写一份 sw:null 的 manifest 再回 ok —— 下游会按「有没有回读数据」判真伪。
+    if (swReadback?.error) {
+      return failed({
+        op: 'deliver.sldprt',
+        designId,
+        error: swReadback.error,
+        delivery,
+        changes: {
+          fileCheck,
+          designStore,
+          activation,
+          readback,
+          delivery,
+          sw: null,
+          swError: { code: swReadback.error.code, message: swReadback.error.message },
+          saved: delivery.saved,
+          bytes: delivery.bytes,
+          source: delivery.source,
+        },
+        nextActions: [
+          '确认保存后能按标题关掉这份文档再重开（deliver 的 readback 里 skipped/error 写了原因）',
+          '文档被别的会话占用时，等它释放或改用 workspace action="open" 打开磁盘文件后再 deliver',
+        ],
+      })
+    }
 
     return ok(
       envelope({

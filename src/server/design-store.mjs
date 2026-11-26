@@ -112,7 +112,7 @@ export function patchDesign(design, changes, { allowNew = false } = {}) {
   return { design: next, applied, rejected }
 }
 
-export function buildManifest({ design, cadPath, cadBytes = null, cadHash = null, features = [], bindings = {}, dimensionBindings = {}, drivers = null, swVersion = null, status = 'compiled', now = new Date().toISOString() }) {
+export function buildManifest({ design, cadPath, cadBytes = null, cadHash = null, features = [], bindings = {}, dimensionBindings = {}, drivers = null, swVersion = null, sw = null, status = 'compiled', now = new Date().toISOString() }) {
   return {
     schema: DESIGN_SCHEMA,
     partId: design?.partId ?? null,
@@ -128,7 +128,9 @@ export function buildManifest({ design, cadPath, cadBytes = null, cadHash = null
     bindings: bindings ?? {},
     dimensionBindings: dimensionBindings ?? {},
     drivers: drivers ?? null,
-    sw: swVersion ? { version: swVersion } : null,
+    // sw 块是交付证据链的一环：实体数/体积/面数必须是回读出来的。写 null 再报成功
+    // 等于让下游「按 sw 块存在与否」立的规则全部误判（实测退回了两件几何完全正确的件）。
+    sw: sw ?? (swVersion ? { version: swVersion } : null),
   }
 }
 

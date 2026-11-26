@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "partId": "worm-1795677567638",
+  "designId": "worm-helical-1795677521668",
+  "kind": "part",
+  "revision": 1,
+  "units": "mm",
+  "revisedAt": "2026-11-26T07:19:32.166Z",
+  "parameters": {},
+  "definition": {
+    "designId": "worm-helical-1795677521668",
+    "features": [
+      {
+        "kind": "sketch",
+        "id": "blank",
+        "plane": 0,
+        "primitives": [
+          {
+            "shape": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "diameter": 16
+          }
+        ]
+      },
+      {
+        "kind": "extrude",
+        "id": "body",
+        "profile": "blank",
+        "depth": 30,
+        "direction": "+Z"
+      },
+      {
+        "kind": "sketch",
+        "id": "hxbase",
+        "plane": 0,
+        "primitives": [
+          {
+            "shape": "circle",
+            "center": [
+              0,
+              0
+            ],
+            "diameter": 14
+          }
+        ]
+      },
+      {
+        "kind": "helix",
+        "id": "hx",
+        "profile": "hxbase",
+        "definedBy": "heightAndPitch",
+        "height": 30,
+        "pitch": 3.141592653589793
+      },
+      {
+        "kind": "sketch",
+        "id": "groove",
+        "plane": 1,
+        "curves": [
+          {
+            "kind": "line",
+            "start": [
+              5.5,
+              0.2380519009951484
+            ],
+            "end": [
+              5.5,
+              -0.2380519009951484
+            ]
+          },
+          {
+            "kind": "line",
+            "start": [
+              5.5,
+              -0.2380519009951484
+            ],
+            "end": [
+              8.4,
+              -1.2962546749729285
+            ]
+          },
+          {
+            "kind": "line",
+            "start": [
+              8.4,
+              -1.2962546749729285
+            ],
+            "end": [
+              8.4,
+              1.2962546749729285
+            ]
+          },
+          {
+            "kind": "line",
+            "start": [
+              8.4,
+              1.2962546749729285
+            ],
+            "end": [
+              5.5,
+              0.2380519009951484
+            ]
+          }
+        ]
+      },
+      {
+        "kind": "sweep",
+        "id": "thread",
+        "profile": "groove",
+        "path": "hx",
+        "cut": true
+      }
+    ],
+    "schemaVersion": 3,
+    "units": "mm",
+    "params": {}
+  },
+  "expectations": {
+    "volume": 4589.0864,
+    "boundingBox": [
+      16,
+      16,
+      30
+    ],
+    "bodies": 1,
+    "holes": [
+      {
+        "diameter": 16,
+        "count": 1
+      },
+      {
+        "diameter": 0,
+        "count": 1
+      }
+    ],
+    "holePositions": [
+      {
+        "diameter": 16,
+        "at": [
+          0,
+          0
+        ]
+      },
+      {
+        "diameter": 0,
+        "at": [
+          0,
+          0
+        ]
+      }
+    ],
+    "pitches": []
+  },
+  "cad": {
+    "path": "C:\\Users\\mota\\Desktop\\工程自动化\\插件\\dsh-sw建模自动化\\src\\test\\out\\worm-1795677567638.SLDPRT"
+  }
+}

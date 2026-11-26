@@ -347,3 +347,21 @@
 | `drawing` 标注/标题栏 | 仅视图 | 视图可出；标注/标题栏缺口写 `tool_gap`，不冒充完整工程图 |
 
 缺口不是“可以忽略”：交付里必须写 `tool_gap`/`unmeasured`/`fallback`，由 L1/L0 决定是否接受。
+
+## 总规则：请求了就必须完成，否则报错（禁止静默成功）
+
+这条规则统一收口了这一类事故：**参数被吃掉 / 字段写 null，但回包 `ok`**。它比任何单个
+bug 都贵，因为下游会按「回包里有没有那个东西」立规则，而工具永远说"有"。
+
+| 情形 | 必须返回 | 典型现场 |
+|---|---|---|
+| 传了不认识的参数/枚举值 | `UNSUPPORTED_PARAM` | `revolve axis="w"`、`bevel` 在只做直齿的实现上 |
+| 传了不支持的 feature kind | `UNSUPPORTED_FEATURE_KIND` | 旧实现把未知 kind 无声跳过，整件照建 |
+| 参数合法但无法生效 | `UNSUPPORTED_PARAM`（附带 `detail` 说明为什么） | 薄壁类型拼错、扭转控制拼错 |
+| 交付时拿不到回读 | `MISSING_READBACK`，**deliver 失败** | manifest 的 `sw` 块写过 null 却报成功 |
+| 动作建了特征但没达到目的 | 失败码 + 读数 | `SWEEP_NO_MATERIAL_REMOVED`、`EXTRUDE_SEPARATE_BODY` |
+
+`deliver` 的 `sw` 块现在必须是**保存后 close→open 回读**出来的：
+`bodies / faces / volume_mm3 / mass_g（带 massBasis）/ bbox_mm / saved_at / reopened_at /
+volume_after_reopen_mm3 / delta_pct`。拿不到就失败，不写 null。
+写 manifest 之外的补充读数（例如自己要的验收表）放 `verify.json`，但那**不能替 deliver 签收**。

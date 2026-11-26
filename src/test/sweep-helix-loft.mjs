@@ -45,8 +45,14 @@ function check(name, ok, detail) {
 
   check('Compiler 认识 helix / sweep / loft', ['"helix"', '"sweep"', '"loft"'].every((k) => compiler.includes(`case ${k}:`)))
   const defaultAt = compiler.indexOf('\n                    default:')
-  check('未知 feature kind 不再静默跳过',
+  check('unknown feature kind 不再静默跳过',
     defaultAt > 0 && compiler.slice(defaultAt, defaultAt + 600).includes('UNSUPPORTED_FEATURE_KIND'))
+  const store = read('server/design-store.mjs')
+  check('manifest 的 sw 块来自回读参数（不再是恒 null）',
+    /sw = null/.test(store) && /sw: sw \?\?/.test(store))
+  check('deliver 拿不到回读就报 MISSING_READBACK',
+    server.includes('function buildSwReadback(') && server.includes("fail('MISSING_READBACK'")
+      && /if \(swReadback\?\.error\)/.test(server))
   check('Sweeps 走的是四条原生 API', ['_doc.InsertHelix', 'InsertCutSwept5', 'InsertProtrusionSwept4', 'InsertLoftRefSurface2', 'InsertProtrusionBlend2', 'InsertCutBlend'].every((api) => sweeps.includes(api)))
   check('扫描参数枚举化（拼错即报错，不落默认值）',
     sweeps.includes('UNSUPPORTED_INPUT') === false
@@ -116,6 +122,22 @@ try {
   check('齿顶轴向齿厚 0.840 ± 0.02', tipBand !== undefined && Math.abs(tipBand.ribbonWidthMm - 0.840) < 0.02,
     tipBand ?? null)
   check('旋向读数存在且为单头右旋', (hel.helicalEdges ?? []).every((e) => e.hand === 'right'), hel.helicalEdges)
+
+  // ---- 交付：manifest 的 sw 块必须是 close→open 回读，不是 null ----
+  const target = join(repo, 'test', 'out', `worm-${Date.now()}.SLDPRT`)
+  const delivered = await session.tool('deliver', { designId, kind: 'sldprt', path: target })
+  check('deliver 成功', delivered.status === 'ok', delivered.summary)
+  const manifestPath = target.replace(/\.SLDPRT$/i, '.manifest.json')
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'))
+  const sw = manifest.sw ?? null
+  check('manifest.sw 不是 null', sw !== null, sw)
+  check('sw 块有重开回读字段',
+    sw !== null && Number.isFinite(sw.bodies) && Number.isFinite(sw.faces) && Number.isFinite(sw.volume_mm3)
+      && Array.isArray(sw.bbox_mm) && typeof sw.reopened_at === 'string' && Number.isFinite(sw.delta_pct),
+    sw === null ? null : { bodies: sw.bodies, faces: sw.faces, volume_mm3: sw.volume_mm3, bbox_mm: sw.bbox_mm, reopened_at: sw.reopened_at, delta_pct: sw.delta_pct })
+  check('sw.mass_g 有密度依据（不是凭空数字）',
+    sw !== null && Number.isFinite(sw.mass_g) && typeof sw.massBasis === 'string' && sw.massBasis.length > 0,
+    sw === null ? null : { mass_g: sw.mass_g, massBasis: sw.massBasis })
 } finally {
   try { session.close() } catch { }
 }
