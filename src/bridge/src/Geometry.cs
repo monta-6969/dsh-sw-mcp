@@ -662,7 +662,58 @@ namespace SwMcp
         {
             IPartDoc part = doc as IPartDoc;
             if (part == null)
-                return Json.Dict("kind", "non-part");
+            {
+                // 装配体：以前这里直接回 kind="non-part"，于是 verify 的 assembly 档
+                // 拿到的 geometry 里没有 components、也没有 interference，两行都记
+                // unmeasured —— 而调用方以为"读过了"。这里给三样真实读数：组件数、
+                // 各组件包围盒的并集、干涉（布尔交集体积）。
+                IAssemblyDoc asm = doc as IAssemblyDoc;
+                if (asm == null) return Json.Dict("kind", "non-part");
+
+                int count = 0;
+                double[] box = null;
+                Array members = null;
+                try { members = asm.GetComponents(false) as Array; } catch (COMException) { }
+                if (members != null)
+                {
+                    foreach (object entry in members)
+                    {
+                        IComponent2 component = entry as IComponent2;
+                        if (component == null) continue;
+                        count++;
+                        try
+                        {
+                            double[] b = component.GetBox(false, false) as double[];
+                            if (b == null || b.Length < 6) continue;
+                            if (box == null)
+                            {
+                                box = new double[] { b[0], b[1], b[2], b[3], b[4], b[5] };
+                            }
+                            else
+                            {
+                                for (int i = 0; i < 3; i++) if (b[i] < box[i]) box[i] = b[i];
+                                for (int i = 3; i < 6; i++) if (b[i] > box[i]) box[i] = b[i];
+                            }
+                        }
+                        catch (COMException) { }
+                    }
+                }
+
+                Dictionary<string, object> asmBox = null;
+                if (box != null)
+                {
+                    asmBox = Json.Dict(
+                        "min", Json.List(Round(box[0] * 1000.0), Round(box[1] * 1000.0), Round(box[2] * 1000.0)),
+                        "max", Json.List(Round(box[3] * 1000.0), Round(box[4] * 1000.0), Round(box[5] * 1000.0)),
+                        "size", Json.List(Round((box[3] - box[0]) * 1000.0), Round((box[4] - box[1]) * 1000.0), Round((box[5] - box[2]) * 1000.0)),
+                        "units", "mm");
+                }
+                return Json.Dict(
+                    "kind", "assembly",
+                    "components", count,
+                    "boundingBox", asmBox,
+                    "interference", AssemblyOps.InterferenceBlock(asm));
+            }
             object raw = part.GetBodies2((int)swBodyType_e.swSolidBody, false);
             Array arr = raw as Array;
             if (arr == null || arr.Length == 0)

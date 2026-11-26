@@ -10,6 +10,7 @@
 // whose basis we would have to reverse-engineer.
 
 import { describeMeasure, measureHints } from './verify.mjs'
+import { dofFromMates } from './dof.mjs'
 import { describeEvidence, loadDrawing, validateDrawing } from './drawing-evidence.mjs'
 import { createSnapshot, describeSnapshot } from './snapshot.mjs'
 import { DESCRIPTIONS } from './tool-face.mjs'
@@ -455,10 +456,11 @@ export function registerObserveTools(server, z, deps) {
             + 'file=文件字节与哈希，geometry=体积/实体数，dimensions=包围盒与各孔径数量，positions=孔心/孔距，'
             + 'topology=单实体与开口边，assembly=组件数与干涉（零件会标 skipped）'),
         measure: z
-          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes', 'helix']) })
+          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes', 'helix', 'minDistance']) })
           .passthrough()
           .optional()
-          .describe('measure 动作要测什么（kind 见 schema；holes 列孔，axis 取轴线位置与高度，spacing 取两孔轴线距离，distance 取点到面/面的距离）'),
+          .describe('measure 动作要测什么（kind 见 schema；holes 列孔，axis 取轴线位置与高度，spacing 取两孔轴线距离，'
+            + 'distance 取点到面/面的距离，minDistance 取两实体（装配组件或零件多实体）面-面最小距离），'),
         figure: z
           .object({
             op: z.enum(['info', 'crop', 'fit', 'frame']).optional().describe('info=只问尺寸；crop=裁一块放大；fit=整图缩到能看清布局；frame=整图加网格'),
@@ -996,19 +998,50 @@ export function registerObserveTools(server, z, deps) {
       if (args.action === 'assembly') {
         const started = Date.now()
         try {
-          const result = await callBridge('components', { designId: resolveDesignId(args.designId) })
+          const designId = resolveDesignId(args.designId)
+          const result = await callBridge('components', { designId })
+          // 干涉在 components 回包里（桥接器用 InterferenceDetectionMgr 的布尔交集体积）。
+          const interference = result.interference ?? null
+          // 自由度：SOLIDWORKS 没有公开 DOF 接口，按配合清单算近似值 —— 但必须是
+          // 真读回来的配合，不是调用方给的。读配合失败就把 dof 置 null 并说明原因，
+          // 不编一个数出来。
+          let mates = null
+          let dof = null
+          let dofError = null
+          try {
+            const mateResult = await callBridge('mates', { designId })
+            mates = (mateResult.mates ?? []).map((mate) => ({
+              name: mate?.name ?? null,
+              type: mate?.type ?? null,
+              suppressed: mate?.suppressed === true,
+              lockRotation: mate?.lockRotation === true,
+            }))
+            dof = dofFromMates({ components: result.components ?? [], mates: mateResult.mates ?? [] })
+          } catch (error) {
+            dofError = String(error?.message ?? error)
+          }
+          const interfered = interference?.available === true ? interference.count : null
+          const summary = `${result.assembly?.title ?? '当前装配体'}：${result.count} 个组件`
+            + (interfered === null ? '｜干涉未量成' : `｜干涉 ${interfered} 对（体积 ${interference.volumeMm3} mm³，贴面 ${interference.coincidentCount} 对）`)
+            + (dof === null ? '｜自由度未算出' : `｜剩余自由度 ${dof.remaining}`)
           return ok(
             envelope({
-              summary: `${result.assembly?.title ?? '当前装配体'}：${result.count} 个组件`,
+              summary,
               changes: {
                 assembly: result.assembly,
                 components: result.components,
                 count: result.count,
+                interference,
+                dof,
+                mates,
+                ...(dofError === null ? {} : { dofError }),
               },
               timings: { componentsMs: Date.now() - started },
               nextActions: result.count === 0
                 ? ['装配体是空的；用 model action=assemble 放零件进来']
-                : [],
+                : interference?.available !== true
+                  ? [`干涉没量成（${interference?.reason ?? '未知'}）：不能当成没有干涉，先查装配是否已解算`]
+                  : [],
             }),
           )
         } catch (error) {

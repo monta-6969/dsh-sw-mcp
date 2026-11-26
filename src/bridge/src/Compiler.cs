@@ -569,17 +569,21 @@ namespace SwMcp
                         bool both = Json.Bool(f, "both", false);
                         double draft = Json.Dbl(f, "draft", 0);
                         double startOffset = Json.Dbl(f, "startOffset", 0);
+                        // merge=false：多实体零件。默认 true（与 SOLIDWORKS 一致），
+                        // 显式 false 才允许"新实体不与旧实体合并"。
+                        bool merge = Json.Bool(f, "merge", true);
                         int bodiesBefore = BodyCount();
                         IFeature feat = b.ExtrudeSketch(sketch, depth, symmetric, reverse,
-                            kind == "cut", throughAll, draft, both, startOffset, directionExplicit);
-                        _notes.Add("extrude " + id + " bodies " + bodiesBefore + " -> " + BodyCount());
+                            kind == "cut", throughAll, draft, both, startOffset, directionExplicit, merge);
+                        _notes.Add("extrude " + id + " merge=" + merge + " bodies " + bodiesBefore + " -> " + BodyCount());
 
                         // A second body means the profile never touched the material it was
                         // meant to join. That is NOT a hint that the direction was wrong:
                         // flipping it silently turned a bracket whose web sat 0.3 mm off the
                         // plate into two disconnected parts, and every later feature then
                         // worked on whichever body it happened to hit.
-                        if (kind == "extrude" && bodiesBefore > 0 && BodyCount() > bodiesBefore)
+                        // 例外：显式 merge:false = 明确要多实体，不按错误处理。
+                        if (kind == "extrude" && merge && bodiesBefore > 0 && BodyCount() > bodiesBefore)
                             throw new BridgeError("EXTRUDE_SEPARATE_BODY",
                                 "extrude \"" + id + "\" produced a body that is not connected to "
                                 + "the rest of the part (bodies " + bodiesBefore + " -> "

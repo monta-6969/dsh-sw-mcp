@@ -541,6 +541,17 @@ namespace SwMcp
             bool reverse, bool cut, bool throughAll, double draftDeg, bool throughAllBoth,
             double startOffsetMm, bool directionExplicit)
         {
+            return ExtrudeSketch(sketch, depthMm, symmetric, reverse, cut, throughAll, draftDeg,
+                throughAllBoth, startOffsetMm, directionExplicit, true);
+        }
+
+        /// <summary>merge=false 时新拉伸的实体不与已有实体合并 —— 多实体零件必须走这条
+        /// （两个相交轮廓画在同一草图里是「非简单区域」，SOLIDWORKS 直接拒绝拉伸，
+        /// 报 null；正确做法是两个草图 + 第二次拉伸 merge:false）。</summary>
+        public IFeature ExtrudeSketch(IFeature sketch, double depthMm, bool symmetric,
+            bool reverse, bool cut, bool throughAll, double draftDeg, bool throughAllBoth,
+            double startOffsetMm, bool directionExplicit, bool merge)
+        {
             if (sketch == null) throw new BridgeError("NO_SKETCH", "no profile sketch to extrude");
             if (cut) return CutSketch(sketch, depthMm, throughAll, reverse, throughAllBoth,
                 startOffsetMm, directionExplicit);
@@ -576,14 +587,17 @@ namespace SwMcp
                 d1, d2,
                 draftOn, draftOn, false, false, draft, draftOn && symmetric ? draft : 0,
                 false, false, false, false,
-                true, false, true,
+                merge, false, true,
                 startOffsetMm == 0 ? 0 : (int)swStartConditions_e.swStartOffset,
                 SwHost.ToMeters(startOffsetMm), false);
             _steps.Add("genericExtrude depth=" + depthMm + " symmetric=" + symmetric
+                + " merge=" + merge
                 + " -> " + (feature == null ? "NULL" : feature.Name));
             if (feature == null)
                 throw new BridgeError("EXTRUDE_FAILED",
-                    "FeatureExtrusion3 returned null for this profile (depth " + depthMm + " mm)");
+                    "FeatureExtrusion3 returned null for this profile (depth " + depthMm + " mm, merge=" + merge + ")"
+                    + "；最可能的原因：轮廓自交或两个轮廓重叠成一个非简单区域（同一草图里画两个相交矩形/圆就是这种），"
+                    + "其次是开放轮廓、或轮廓完全落在草图平面外。多实体请分两个草图、第二次拉伸用 merge:false。");
 
             VerifyChanged("Extrude", beforeVolume);
             return feature;

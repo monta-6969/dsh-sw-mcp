@@ -35,11 +35,12 @@ namespace SwMcp
                 case "distance": return Distance(req);
                 case "planes": return PlaneList(req);
                 case "helix": return Helix(req);
+                case "minDistance": return MinDistance(req);
                 default:
                     throw new BridgeError("BAD_ARGUMENT",
                         "measure kind \"" + kind + "\" is not supported",
                         Json.Dict("kinds", Json.List("faces", "cylinders", "holes", "axis",
-                            "spacing", "distance", "planes", "helix")));
+                            "spacing", "distance", "planes", "helix", "minDistance")));
             }
         }
 
@@ -1040,6 +1041,378 @@ namespace SwMcp
                     "along", names[along],
                     "document", DocInfo(doc)), doc, fallback);
             }
+        }
+
+        /// <summary>两实体最小距离：CAD 层以前只能拿 OBB 近似猜干涉。
+        ///
+        /// 走 IEntity.GetDistance（MinDistance=true），面-面最近点由 SOLIDWORKS
+        /// 自己解，不采样、不近似。端点写法：
+        ///   装配：{"component":"flap-1"}
+        ///   零件多实体：{"body":1}（不给 body 就是全部实体）
+        /// 面持久引用（{"face":"&lt;id&gt;"}）还没做：装配与零件的 id 作用域不同，
+        /// 猜错就是给一个看起来对的距离，所以直接 UNSUPPORTED_PARAM。</summary>
+        static Dictionary<string, object> MinDistance(Dictionary<string, object> req)
+        {
+            Dictionary<string, object> a = Json.Obj(req["a"]);
+            Dictionary<string, object> b = Json.Obj(req["b"]);
+            if (a == null || b == null)
+                throw new BridgeError("BAD_ARGUMENT",
+                    "measure kind=minDistance needs \"a\" and \"b\": {\"component\":\"flap-1\"} 或 {\"body\":0}",
+                    Json.Dict("example", Json.Dict(
+                        "a", Json.Dict("component", "flap-1"),
+                        "b", Json.Dict("component", "worm-1"))));
+
+            using (SwHost h = SwHost.Attach())
+            {
+                bool fallback;
+                IModelDoc2 doc = Operations.OptionalDesignDocument(h, req, "measure.minDistance", out fallback);
+                int maxPairs = (int)Json.Dbl(req, "maxPairs", 32);
+
+                List<IFace2> facesA = FacesOf(doc, a, "a");
+                List<IFace2> facesB = FacesOf(doc, b, "b");
+                if (facesA.Count == 0)
+                    throw new BridgeError("NO_GEOMETRY", "a 端没有可用面（实体为空或被压缩）", Json.Dict("side", "a"));
+                if (facesB.Count == 0)
+                    throw new BridgeError("NO_GEOMETRY", "b 端没有可用面（实体为空或被压缩）", Json.Dict("side", "b"));
+
+                // 先按「面盒间隙」排序：盒间隙是真距离的下界，取最小的 K 对再逐对精算。
+                // SOLIDWORKS 的量具（IMeasure）只吃两个实体，所以必须先挑出一对；
+                // 报出去的数值是量具算的，不是盒间隙 —— 盒间隙只用来排候选。
+                List<FacePair> candidates = new List<FacePair>();
+                foreach (IFace2 fa in facesA)
+                {
+                    double[] boxA = FaceBox(fa);
+                    foreach (IFace2 fb in facesB)
+                    {
+                        double[] boxB = FaceBox(fb);
+                        candidates.Add(new FacePair(fa, fb, BoxGap(boxA, boxB)));
+                    }
+                }
+                candidates.Sort(delegate(FacePair x, FacePair y) { return x.Gap.CompareTo(y.Gap); });
+
+                IMeasure tool = null;
+                try { tool = doc.Extension.CreateMeasure(); } catch (COMException) { }
+                if (tool == null)
+                    throw new BridgeError("MIN_DISTANCE_UNAVAILABLE",
+                        "IModelDocExtension.CreateMeasure() 返回空：这个文档不能用量具",
+                        Json.Dict("facesA", facesA.Count, "facesB", facesB.Count));
+
+                double best = double.MaxValue;
+                FacePair bestPair = null;
+                bool intersects = false;
+                int tested = 0;
+                bool truncated = false;
+                bool debug = Json.Bool(req, "debug", false);
+                List<object> trace = debug ? new List<object>() : null;
+                foreach (FacePair pair in candidates)
+                {
+                    if (tested >= maxPairs) { truncated = true; break; }
+                    tested++;
+                    bool measured = false;
+                    string why = null;
+                    double distance = -1;
+                    measured = MeasurePair(tool, doc, pair.A, pair.B, out distance, out why);
+                    if (trace != null && trace.Count < 12)
+                        trace.Add(Json.Dict("i", tested, "ok", measured,
+                            "distanceMm", Json.R(SwHost.FromMeters(distance)),
+                            "why", why, "boxGapMm", Json.R(SwHost.FromMeters(pair.Gap))));
+                    if (!measured) continue;
+                    if (distance < best)
+                    {
+                        best = distance;
+                        bestPair = pair;
+                        try { intersects = tool.IsIntersect; } catch (COMException) { }
+                    }
+                    if (best <= 1e-9) break;
+                }
+
+                if (bestPair == null)
+                    throw new BridgeError("MIN_DISTANCE_UNAVAILABLE",
+                        "量具没有算出可用距离（已试 " + tested + " 对面）",
+                        Json.Dict("candidatesTested", tested, "facesA", facesA.Count, "facesB", facesB.Count,
+                            "trace", trace));
+
+                // 用最好的一对再算一次：量具状态会随后续调用变化，delta/坐标必须
+                // 是「这一对」的。最近点由量具的 X/Y/Z（第一实体上的点）加上 delta 得到，
+                // 并且**必须自洽**：|delta| 要等于 Distance，两个点要相差这么远。
+                // 不自洽就报 null + 标志，不编两个坐标出来（同一个点是最典型的假读数）。
+                double[] delta = null;
+                double[] pointA = null;
+                bool consistent = false;
+                double remeasured = -1;
+                string remeasureWhy = null;
+                if (MeasurePair(tool, doc, bestPair.A, bestPair.B, out remeasured, out remeasureWhy))
+                {
+                    try
+                    {
+                        delta = new double[] { tool.DeltaX, tool.DeltaY, tool.DeltaZ };
+                        pointA = new double[] { tool.X, tool.Y, tool.Z };
+                        double len = Math.Sqrt(delta[0] * delta[0] + delta[1] * delta[1] + delta[2] * delta[2]);
+                        consistent = Math.Abs(len - best) <= Math.Max(1e-6, best * 1e-3);
+                    }
+                    catch (COMException) { }
+                }
+                object deltaList = null;
+                object closestA = null;
+                object closestB = null;
+                if (delta != null && pointA != null && consistent)
+                {
+                    deltaList = Json.List(Json.R(SwHost.FromMeters(delta[0])),
+                        Json.R(SwHost.FromMeters(delta[1])),
+                        Json.R(SwHost.FromMeters(delta[2])));
+                    closestA = Json.List(Json.R(SwHost.FromMeters(pointA[0])),
+                        Json.R(SwHost.FromMeters(pointA[1])),
+                        Json.R(SwHost.FromMeters(pointA[2])));
+                    closestB = Json.List(Json.R(SwHost.FromMeters(pointA[0] + delta[0])),
+                        Json.R(SwHost.FromMeters(pointA[1] + delta[1])),
+                        Json.R(SwHost.FromMeters(pointA[2] + delta[2])));
+                }
+
+                // 量具到底回了什么：把每个字段原样摊开。Distance 对圆柱面不是"表面
+                // 间隙"（实测给 25.000 = 轴线距），只看一个字段就会量错。
+                Dictionary<string, object> fields = null;
+                if (debug)
+                {
+                    // GetClosestPointOn 的返回约定没有文档可查（签名是 Object），
+                    // 这里把原始返回摊开：类型名 + 所有数值。要拿它做"点到面投影"
+                    // 之前，必须先看清它是 {u,v,x,y,z} 还是 {x,y,z}。
+                    Dictionary<string, object> closestProbe = null;
+                    try
+                    {
+                        double[] boxB = FaceBox(bestPair.B);
+                        if (boxB != null && boxB.Length >= 6)
+                        {
+                            object raw = bestPair.A.GetClosestPointOn(
+                                (boxB[0] + boxB[3]) / 2, (boxB[1] + boxB[4]) / 2, (boxB[2] + boxB[5]) / 2);
+                            closestProbe = RawProbe(raw);
+                        }
+                    }
+                    catch (COMException ex) { closestProbe = Json.Dict("error", ex.Message); }
+                    catch (InvalidCastException ex) { closestProbe = Json.Dict("error", "CAST:" + ex.Message); }
+                    fields = Json.Dict(
+                        "DistanceMm", TryField(delegate { return tool.Distance; }),
+                        "NormalDistanceMm", TryField(delegate { return tool.NormalDistance; }),
+                        "CenterDistanceMm", TryField(delegate { return tool.CenterDistance; }),
+                        "ProjectionMm", TryField(delegate { return tool.Projection; }),
+                        "IsIntersect", TryBool(delegate { return tool.IsIntersect; }),
+                        "IsParallel", TryBool(delegate { return tool.IsParallel; }),
+                        "X", TryField(delegate { return tool.X; }),
+                        "Y", TryField(delegate { return tool.Y; }),
+                        "Z", TryField(delegate { return tool.Z; }),
+                        "remeasuredMm", Json.R(SwHost.FromMeters(remeasured)),
+                        "remeasureWhy", remeasureWhy,
+                        "closestPointProbe", closestProbe);
+                }
+
+                return Operations.MarkDocumentFallback(Json.Dict(
+                    "kind", "minDistance",
+                    "minDistanceMm", Json.R(SwHost.FromMeters(best)),
+                    "deltaMm", deltaList,
+                    "closestA", closestA,
+                    "closestB", closestB,
+                    "closestPointsConsistent", consistent,
+                    "intersecting", intersects || best <= 1e-9,
+                    "facesA", facesA.Count,
+                    "facesB", facesB.Count,
+                    "candidatesTotal", candidates.Count,
+                    "candidatesTested", tested,
+                    "complete", !truncated,
+                    "a", Json.Dict("component", Json.Str(a, "component", null), "body", a.ContainsKey("body") ? a["body"] : null),
+                    "b", Json.Dict("component", Json.Str(b, "component", null), "body", b.ContainsKey("body") ? b["body"] : null),
+                    "method", "IModelDocExtension.CreateMeasure → IMeasure.Calculate([面A,面B]) → Distance（SOLIDWORKS 量具本体，不是采样）",
+                    // 校准没过就不许被当成实测引用：IMeasure 对两张圆柱面回的是轴线距
+                    // （Ø20 两圆柱表面间隙 5.000，它回 25.000），NormalDistance 回 -1000 哨兵。
+                    // 这条标记是给下游立的规矩，不是免责声明。
+                    "calibration", "unverified",
+                    "calibrationNote", "未校准，禁止引用：IMeasure.Distance 对圆柱面给的是轴线距而非表面间隙（Ø20 两圆柱间隙 5.000 实测回 25.000）。间隙判定改用「偏置+布尔交」（干涉体积那把尺已校准）",
+                    "debugTrace", trace,
+                    "debugFields", fields,
+                    "document", DocInfo(doc)), doc, fallback);
+            }
+        }
+
+        /// <summary>把 GetClosestPointOn 的原始返回摊成可读结构（类型 + 数值）。</summary>
+        static Dictionary<string, object> RawProbe(object raw)
+        {
+            if (raw == null) return Json.Dict("type", "null");
+            List<object> values = new List<object>();
+            Array arr = raw as Array;
+            if (arr != null)
+            {
+                foreach (object item in arr)
+                {
+                    double d = Json.ToDouble(item, double.NaN);
+                    values.Add(double.IsNaN(d) ? (object)item : Json.R(d * 1000.0));
+                }
+            }
+            else
+            {
+                double d = Json.ToDouble(raw, double.NaN);
+                if (!double.IsNaN(d)) values.Add(Json.R(d * 1000.0));
+            }
+            return Json.Dict("type", raw.GetType().Name, "valuesMm", values);
+        }
+
+        /// <summary>读一个量具字段，失败回 null（不把 0 当成"量到了 0"）。</summary>
+        static object TryField(Func<double> read)
+        {
+            try
+            {
+                double v = read();
+                if (double.IsNaN(v)) return null;
+                return Json.R(SwHost.FromMeters(v));
+            }
+            catch (COMException) { return null; }
+        }
+
+        static object TryBool(Func<bool> read)
+        {
+            try { return read(); } catch (COMException) { return null; }
+        }
+
+        /// <summary>用 SOLIDWORKS 量具量一对实体。
+        ///
+        /// 两条路径都要留：`Calculate([a,b])` 直接喂数组（文档里这么写），实测
+        /// 2026-11-26 在本机 2026 SP3.2 上对「同零件两个实体的面」一律返回 false
+        /// （不是抛错，是 false），于是改成「先选再算」——量具本来就是拿当前选择算的。
+        /// 返回 false 时 why 写清是哪条路径失败，别让调用方猜。</summary>
+        static bool MeasurePair(IMeasure tool, IModelDoc2 doc, IFace2 a, IFace2 b, out double distance, out string why)
+        {
+            distance = -1;
+            why = null;
+            // 路径 1：直接喂数组
+            try
+            {
+                if (tool.Calculate(new object[] { a, b }))
+                {
+                    distance = tool.Distance;
+                    if (!double.IsNaN(distance) && distance >= 0) return true;
+                    why = "Array:Calculate=true but distance=" + distance;
+                }
+                else why = "Array:Calculate=false";
+            }
+            catch (COMException ex) { why = "Array:COM:" + ex.Message; }
+            catch (InvalidCastException ex) { why = "Array:CAST:" + ex.Message; }
+
+            // 路径 2：先选中两个面，再让量具按当前选择算
+            try
+            {
+                doc.ClearSelection2(true);
+                IEntity ea = a as IEntity;
+                IEntity eb = b as IEntity;
+                if (ea == null || eb == null) { why += "; Select:not-an-entity"; return false; }
+                bool s1 = ea.Select4(false, null);
+                bool s2 = eb.Select4(true, null);
+                if (!s1 || !s2) { why += "; Select:false(" + s1 + "," + s2 + ")"; return false; }
+                bool ok = tool.Calculate(null);
+                doc.ClearSelection2(true);
+                if (!ok) { why += "; Select:Calculate=false"; return false; }
+                distance = tool.Distance;
+                if (double.IsNaN(distance) || distance < 0) { why += "; Select:distance=" + distance; return false; }
+                return true;
+            }
+            catch (COMException ex) { why += "; Select:COM:" + ex.Message; }
+            catch (InvalidCastException ex) { why += "; Select:CAST:" + ex.Message; }
+            return false;
+        }
+
+        sealed class FacePair
+        {
+            public IFace2 A;
+            public IFace2 B;
+            public double Gap;
+            public FacePair(IFace2 a, IFace2 b, double gap) { A = a; B = b; Gap = gap; }
+        }
+
+        static double[] FaceBox(IFace2 face)
+        {
+            try { return face.GetBox() as double[]; } catch (COMException) { return null; }
+        }
+
+        /// <summary>两个面盒之间的间隙（米）。任一盒缺失时返回 0，让它排到最前面 ——
+        /// 宁可多花一次量具调用，也不要因为缺盒把真正的最近面挤到候选之外。</summary>
+        static double BoxGap(double[] a, double[] b)
+        {
+            if (a == null || b == null || a.Length < 6 || b.Length < 6) return 0;
+            double sum = 0;
+            for (int i = 0; i < 3; i++)
+            {
+                double d = 0;
+                if (b[i] > a[i + 3]) d = b[i] - a[i + 3];
+                else if (a[i] > b[i + 3]) d = a[i] - b[i + 3];
+                sum += d * d;
+            }
+            return Math.Sqrt(sum);
+        }
+
+        /// <summary>把一个端点（component 名 / body 序号）摊成面列表。</summary>
+        static List<IFace2> FacesOf(IModelDoc2 doc, Dictionary<string, object> spec, string which)
+        {
+            if (!string.IsNullOrEmpty(Json.Str(spec, "face", null)))
+                throw new BridgeError("UNSUPPORTED_PARAM",
+                    "measure minDistance 的 " + which + ".face 还没实现：持久引用在装配与零件里作用域不同，"
+                    + "解析错了会给出一个看起来对的距离。用 component=\"名字\" 或 body=序号。",
+                    Json.Dict("which", which));
+
+            List<IBody2> bodies = new List<IBody2>();
+            string componentName = Json.Str(spec, "component", null);
+            if (!string.IsNullOrEmpty(componentName))
+            {
+                IAssemblyDoc asm = doc as IAssemblyDoc;
+                if (asm == null)
+                    throw new BridgeError("BAD_ARGUMENT",
+                        which + ".component 只对装配体有意义：这是零件文档，用 body=序号", Json.Dict("which", which));
+                IComponent2 component = asm.GetComponentByName(componentName);
+                if (component == null)
+                    throw new BridgeError("COMPONENT_NOT_FOUND",
+                        "装配里没有名为 \"" + componentName + "\" 的组件", Json.Dict("which", which, "component", componentName));
+                Array rawBodies = component.GetBodies2((int)swBodyType_e.swSolidBody) as Array;
+                if (rawBodies != null)
+                    foreach (object o in rawBodies)
+                    {
+                        IBody2 body = o as IBody2;
+                        if (body != null) bodies.Add(body);
+                    }
+            }
+            else
+            {
+                IPartDoc part = doc as IPartDoc;
+                if (part == null)
+                    throw new BridgeError("BAD_ARGUMENT",
+                        which + " 需要一个 component 名（装配体）或 body 序号（零件）", Json.Dict("which", which));
+                Array rawBodies = part.GetBodies2((int)swBodyType_e.swSolidBody, false) as Array;
+                if (rawBodies != null)
+                    foreach (object o in rawBodies)
+                    {
+                        IBody2 body = o as IBody2;
+                        if (body != null) bodies.Add(body);
+                    }
+                if (spec.ContainsKey("body"))
+                {
+                    int index = (int)Json.Dbl(spec, "body", 0);
+                    if (index < 0 || index >= bodies.Count)
+                        throw new BridgeError("BODY_NOT_FOUND",
+                            "实体序号 " + index + " 越界（这个文档有 " + bodies.Count + " 个实体）",
+                            Json.Dict("which", which, "bodies", bodies.Count));
+                    IBody2 only = bodies[index];
+                    bodies = new List<IBody2>();
+                    bodies.Add(only);
+                }
+            }
+
+            List<IFace2> entities = new List<IFace2>();
+            foreach (IBody2 body in bodies)
+            {
+                Array faces = null;
+                try { faces = body.GetFaces() as Array; } catch (COMException) { }
+                if (faces == null) continue;
+                foreach (object f in faces)
+                {
+                    IFace2 face = f as IFace2;
+                    if (face != null) entities.Add(face);
+                }
+            }
+            return entities;
         }
 
         static int DominantAxis(double[] d)

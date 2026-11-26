@@ -49,7 +49,7 @@ import { SELECTION_MEMBERS, convertLengthArgs } from './invoke-units.mjs'
 import { expandGearPrimitives, gearSpecs, expandNativeGear } from './gear.mjs'
 import { openAnalysis } from './analysis/client.mjs'
 import {
-  buildDesign, buildManifest, canonicalJson, designFileFor, driftOf, evaluateTiers, hashFile, hashText, manifestFileFor,
+  applyDeliveryReadback, buildDesign, buildManifest, canonicalJson, designFileFor, driftOf, evaluateTiers, hashFile, hashText, manifestFileFor,
   patchDesign, readContract, restoreCad, snapshotCad, writeJsonAtomic,
 } from './design-store.mjs'
 // deliver 的「文档从哪儿来」决策是纯函数：多会话关掉文档后按 designId 重开/重建，
@@ -3241,10 +3241,12 @@ server.registerTool(
       dz: z.number().optional().describe('componentTranslate：装配坐标 Z 平移量（mm）'),
       unfix: z.boolean().optional().describe('componentTranslate：true=平移前先解除固定（固定件挪不动）'),
       refix: z.boolean().optional().describe('componentTranslate：true=平移后重新固定'),
-      components: z.array(z.object({        path: z.string().describe('零件文件路径'),
-        x: z.number().default(0),
+      components: z.array(z.object({        path: z.string().describe('零件文件路径'),        x: z.number().default(0),
         y: z.number().default(0),
         z: z.number().default(0),
+        instanceName: z.string().optional()
+          .describe('assemble：这个实例在装配里的名字（如 flap-1）。同型号多件靠它区分；'
+            + '名字被占用/非法时回包给 INSTANCE_NAME_FAILED，不会静默留成 part-2'),
         placement: z.string().default('bbox-center')
           .describe('assemble：落位口径。bbox-center（默认）=x/y/z 落在零件包围盒中心；origin=x/y/z 落在零件原点；'
             + 'datum:<name>=x/y/z 落在该零件 design.json 里登记的命名基准原点（名字用 datum action="create" 建，重开不变）。'
@@ -6499,6 +6501,7 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
     volume: null,
     boundingBox: null,
     components: null,
+    featureTree: null,
   }
   const contract = readContract(targetPath)
   state.kind = contract?.design?.kind === 'assembly' || project?.kind === 'assembly' ? 'assembly' : 'part'
@@ -6523,14 +6526,21 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
   try {
     const opened = await callBridge('open', { path: targetPath, designId })
     state.title = opened?.title ?? null
-    state.reopened = state.closedTitle !== null && opened?.opened === true
+    // 关过再开 = 最强证据；本来就没开着（关闭状态的文件）时，重开同样是"磁盘上的
+    // 文件"，但要在证据里写清 closedBefore=false，别把两件事说成一件。
+    state.closedBefore = state.closedTitle !== null
+    state.reopened = opened?.opened === true
     if (state.kind === 'assembly') {
       const listed = await callBridge('components', { designId })
       state.components = Number.isFinite(Number(listed?.count)) ? Number(listed.count) : null
       state.measuredFrom = 'components（重开后的装配文档）'
     } else {
-      const measured = await callBridge('inspect', { designId, format: 'geometry' })
+      // 一次回读同时取几何与特征树：manifest 的 features[] 以前只来自「建模会话的
+      // 意图」，子会话交付已有文件时那份意图不存在，于是 features 写成空数组
+      // （R-61 说得很清楚：空 features 等于没记录）。特征树是文件里的事实。
+      const measured = await callBridge('inspect', { designId, format: 'geometry,tree' })
       state.geometry = measured?.geometry ?? null
+      state.featureTree = Array.isArray(measured?.featureTree) ? measured.featureTree : null
       const shape = state.geometry ?? {}
       state.bodies = Number.isFinite(shape.bodies) ? shape.bodies : null
       state.faces = Number.isFinite(shape.faces) ? shape.faces : null
@@ -6543,12 +6553,50 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
   } catch (error) {
     state.error = { code: error?.code ?? 'READBACK_FAILED', message: error?.message ?? String(error) }
   }
+
+  // R-60：回读完成后把文档关掉，否则 SOLIDWORKS 会一直留 ~$<name>.SLDPRT，
+  // 下游看到锁就断定"还开着"，证据时序全乱（P-0060 实测 07:52 的锁一直在）。
+  if (state.reopened) {
+    try {
+      const closed = await callBridge('close', { title: state.title, allowDirty: true, designId }, { broker: true })
+      state.closedAfterReadback = closed?.closed === true
+    } catch { state.closedAfterReadback = false }
+  }
+  try {
+    const lock = join(dirname(targetPath), '~$' + basename(targetPath))
+    state.lockFileAfter = existsSync(lock) ? 'present' : 'absent'
+  } catch { state.lockFileAfter = null }
   return state
+}
+
+/** 第一个非空的 features 来源：回读树 > 本次建模 > 项目存档。R-61：不许空。 */
+function pickFeatures(...candidates) {
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate) && candidate.length > 0) return candidate
+  }
+  return []
+}
+
+/** 交付回读里的特征树 → manifest.features。
+ *
+ * R-61：features[] 不得为空。建模会话里有意图可以直接抄，子会话交付已有文件时
+ * 没有意图，只能从文件读 —— 参数读不回来就如实写 params:null + source，
+ * 不编参数，也不写空数组。 */
+function featuresFromTree(tree) {
+  if (!Array.isArray(tree)) return []
+  return tree.map((node) => ({
+    name: node?.name ?? null,
+    kind: node?.type ?? null,
+    id: node?.id ?? null,
+    source: 'file-readback',
+    params: null,
+    note: '参数未记录：这条来自交付文件的特征树回读',
+  }))
 }
 
 /** design.json 是唯一真源：交付成功时把它落到 CAD 旁边，并把这一版期望值一起记下。
  *  之后 edit / inspect verify 的 tiers 都读它；SLDPRT 只是编译产物。 */
-async function writeDeliveryContract({ designId, project, path, measuredShape, rebuilt, sw = null }) {
+async function writeDeliveryContract({ designId, project, path, measuredShape, rebuilt, sw = null, features = null }) {
   if (!project?.definition) return null
   const shape = measuredShape ?? {}
   const previous = readContract(path)
@@ -6567,7 +6615,7 @@ async function writeDeliveryContract({ designId, project, path, measuredShape, r
   })
   const manifest = buildManifest({
     design, cadPath: path, cadBytes: statSync(path).size, cadHash: hashFile(path),
-    features: rebuilt?.features ?? project.features ?? [],
+    features: pickFeatures(features, rebuilt?.features, project.features),
     bindings: rebuilt?.bindings ?? project.bindings ?? {},
     dimensionBindings: rebuilt?.dimensionBindings ?? project.dimensionBindings ?? {},
     drivers: rebuilt?.drivers ?? project.drivers ?? null,
@@ -6687,6 +6735,11 @@ function buildSwReadback({ project, readback, savedAt, reopenedAt }) {
       density_g_cm3: density,
       readback: 'close-open',
       readbackPath: readback.path ?? null,
+      // R-60：交付那一刻磁盘上不该还留 ~$ 锁。重开读完就把文档再关掉，
+      // 并把「锁文件还在不在」如实写进证据块 —— 锁还在说明还有别的会话开着它。
+      closedBeforeOpen: readback.closedBefore === true,
+      closedAfterReadback: readback.closedAfterReadback === true,
+      lockFileAfter: readback.lockFileAfter ?? null,
     },
   }
 }
@@ -6769,6 +6822,7 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       sessionDocs.delete(designId)
     }
     let designStore = null
+    const readbackFeatures = featuresFromTree(readback?.featureTree)
     if (wrote && fileCheck.ok && swReadback?.block) {
       try {
         const projectNow = readProject(designId)
@@ -6776,9 +6830,23 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
           designId, project: projectNow, path: targetPath,
           measuredShape: readback?.geometry ?? null, rebuilt: outcome.rebuilt,
           sw: swReadback.block,
+          features: readbackFeatures,
         })
       } catch (error) {
         designStore = { skipped: true, reason: error?.message ?? String(error) }
+      }
+      // 第二条通路：没有任何 project.definition 时（子会话直接交付已有文件），
+      // 上面的合约写入整条跳过，回读结果就无处安放 —— 那就并进盘上那份
+      // manifest。这不是"无条件写"：写进去的是刚读回来的实体数/体积/面数。
+      if (designStore === null) {
+        try {
+          designStore = {
+            ...applyDeliveryReadback({ cadPath: targetPath, sw: swReadback.block, features: readbackFeatures }),
+            viaReadbackMerge: true,
+          }
+        } catch (error) {
+          designStore = { skipped: true, reason: 'READBACK_MERGE_FAILED', message: error?.message ?? String(error) }
+        }
       }
     } else if (swReadback?.error) {
       // 不写 design.json/manifest：一份 sw 为 null 的 manifest 比没有 manifest 更坏。

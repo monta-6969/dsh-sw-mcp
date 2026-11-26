@@ -290,3 +290,41 @@ export function evaluateTiers({ tiers, design, manifest, cadPath, cadHash, geome
   }
   return rows
 }
+/**
+ * 把交付回读（sw 块 / 特征树）并进**已经存在**的 manifest。
+ *
+ * 为什么需要第二条通路：writeDeliveryContract 要先有 project.definition（"这个
+ * designId 建过模"的记录）。子会话里直接打开、再交付一个已有文件时没有这份定义，
+ * deliver 的合约写入整条跳过，manifest 只剩编译期那一版（status=compiled、
+ * features=[]、sw=null）—— 回读明明拿到了，却没有地方放（P-0060_rA 实测）。
+ *
+ * 这里不依赖定义：只把回读的事实并进那份 manifest，其余字段原样保留。
+ * 不写 null：没有 sw 就不动这个字段，让"没读"和"读了没通路"两种失败都能被看见。
+ */
+export function applyDeliveryReadback({ cadPath, sw = null, features = null, now = new Date().toISOString() }) {
+  const manifestPath = manifestFileFor(cadPath)
+  const manifest = readJsonFile(manifestPath)
+  if (!manifest) return { updated: false, reason: 'NO_MANIFEST', manifestPath }
+  const nextFeatures = Array.isArray(features) && features.length > 0
+    ? features
+    : (Array.isArray(manifest.features) ? manifest.features : [])
+  const next = {
+    ...manifest,
+    ...(sw == null ? {} : { sw }),
+    features: nextFeatures,
+    delivery: {
+      ...(manifest.delivery ?? {}),
+      at: now,
+      swSource: sw == null ? null : 'close-open-readback',
+      featureCount: nextFeatures.length,
+    },
+  }
+  writeJsonAtomic(manifestPath, next)
+  return {
+    updated: true,
+    manifestPath,
+    featureCount: nextFeatures.length,
+    swWritten: sw != null,
+    featuresFrom: Array.isArray(features) && features.length > 0 ? 'readback-tree' : 'manifest-existing',
+  }
+}

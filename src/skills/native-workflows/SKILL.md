@@ -343,7 +343,8 @@
 |---|---|---|
 | `datum` 真几何 | missing | `placement:"origin"` + 自己换算；标 `datum_fallback` |
 | `componentRotate frame="local"` | missing | 只用 global/显式旋转点；标 `frame_fallback` |
-| 装配 DOF/干涉读数 | degraded/missing | `assembly_inspect` + `measure`；标 `unmeasured` |
+| 装配 DOF/干涉读数 | 干涉 **available（已校准）**；DOF 近似 | `inspect action="assembly"` 回 `interference`（布尔交集体积，贴面单列 `coincidentCount`）+ `dof`（按配合类型扣，见 `src/server/dof.mjs`，带 caveats） |
+| 最小距离 `measure kind="minDistance"` | **unverified，禁止引用** | `IMeasure.Distance` 对圆柱面回轴线距（间隙 5.000 实测回 25.000）。间隙要判就用「偏置 + 布尔交」：干涉体积那把尺已校准 |
 | `helix` / `sweep` / `loft` | **available** | `build` 的定义里或 `model action="helix"|"sweep"|"loft"`；配方见 N11/N12 |
 | 锥齿 `bevel`/`coneAngle`/`faceWidth` | missing（明确报错） | `gear` 基元收到这些键 → `UNSUPPORTED_PARAM`；直齿轮不会冒充锥齿。要锥齿先做「背锥展开 + 大小端放样」，见 N12 |
 | 螺旋齿 `helixAngle` | missing（明确报错） | 同上；齿面螺旋线作引导线还没接 |

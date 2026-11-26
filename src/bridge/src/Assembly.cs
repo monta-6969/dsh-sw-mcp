@@ -184,16 +184,31 @@ namespace SwMcp
                 List<object> failed = new List<object>();
                 List<object> skipped = new List<object>();
 
-                // 复用装配时不能把同一批零件再插一遍。以前 assemble 复用已有 ASM-02
-                // 又把 C04-02/C05-01 插成 -2 副本，内存变 4 件、磁盘还是 2 件。
-                HashSet<string> existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                // 复用装配时不能把同一批零件再插一遍；但「同件多实例」是正常的
+                // （四瓣整机就是 4 件同型号的瓣）。所以这里按路径**计数**，不按路径
+                // 一刀切：请求里第 k 次出现某路径，装配里已有 ≥k 件才算「已存在」，
+                // 否则补插第 k 件。以前用 HashSet 只记「有没有」，第二次 assemble 会把
+                // 缺的那两件也报成 ALREADY_PRESENT —— 回包看起来完整，磁盘上少两件。
+                Dictionary<string, int> existingCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                HashSet<string> existingNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (object item in Components(asm))
                 {
                     Dictionary<string, object> d = item as Dictionary<string, object>;
-                    string p0 = d != null && d.ContainsKey("path") ? d["path"] as string : null;
-                    if (string.IsNullOrEmpty(p0)) continue;
-                    try { existing.Add(Path.GetFullPath(p0)); } catch (Exception) { existing.Add(p0); }
+                    if (d == null) continue;
+                    string p0 = d.ContainsKey("path") ? d["path"] as string : null;
+                    if (!string.IsNullOrEmpty(p0))
+                    {
+                        string key = p0;
+                        try { key = Path.GetFullPath(p0); } catch (Exception) { }
+                        int have;
+                        existingCount.TryGetValue(key, out have);
+                        existingCount[key] = have + 1;
+                    }
+                    string n0 = d.ContainsKey("name") ? d["name"] as string : null;
+                    if (!string.IsNullOrEmpty(n0)) existingNames.Add(n0);
                 }
+                Dictionary<string, int> requestCount = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                List<object> nameFailures = new List<object>();
 
                 foreach (object raw in Json.Items(req.ContainsKey("components") ? req["components"] : null))
                 {
@@ -209,9 +224,25 @@ namespace SwMcp
                         continue;
                     }
 
-                    if (existing.Contains(path))
+                    // 显式给了实例名：名字已存在就是「这件已经在里面了」，不管路径计到第几次。
+                    string instanceName = Json.Str(c, "instanceName", null);
+                    if (!string.IsNullOrEmpty(instanceName) && existingNames.Contains(instanceName))
                     {
-                        skipped.Add(Json.Dict("path", path, "reason", "ALREADY_PRESENT"));
+                        skipped.Add(Json.Dict("path", path, "reason", "ALREADY_PRESENT",
+                            "instanceName", instanceName));
+                        continue;
+                    }
+
+                    int nth;
+                    requestCount.TryGetValue(path, out nth);
+                    nth++;
+                    requestCount[path] = nth;
+                    int alreadyHave;
+                    existingCount.TryGetValue(path, out alreadyHave);
+                    if (nth <= alreadyHave)
+                    {
+                        skipped.Add(Json.Dict("path", path, "reason", "ALREADY_PRESENT",
+                            "instance", nth, "existing", alreadyHave));
                         continue;
                     }
 
@@ -296,8 +327,36 @@ namespace SwMcp
                         continue;
                     }
 
+                    // 实例名：四瓣整机要按名字挑瓣（flap-1..4），不能靠 part-1/part-2 猜。
+                    // IComponent2.Name2 可写，但写完必须回读 —— 重名时 SOLIDWORKS 自己加后缀，
+                    // 不回读就变成「我给它起的名字」和「它实际叫什么」两回事。
+                    string instanceNameApplied = null;
+                    string instanceNameError = null;
+                    if (!string.IsNullOrEmpty(instanceName))
+                    {
+                        try { component.Name2 = instanceName; }
+                        catch (COMException ex) { instanceNameError = ex.Message; }
+                        catch (InvalidCastException ex) { instanceNameError = ex.Message; }
+                        try { instanceNameApplied = component.Name2; }
+                        catch (COMException) { }
+                        if (instanceNameError == null
+                            && !string.Equals(instanceNameApplied, instanceName, StringComparison.Ordinal))
+                        {
+                            instanceNameError = "SOLIDWORKS 没采用这个名字（回读是 \"" + (instanceNameApplied ?? "?")
+                                + "\"）：同名组件已存在时它会自己改后缀";
+                        }
+                        if (instanceNameError != null)
+                        {
+                            nameFailures.Add(Json.Dict("path", path, "instanceName", instanceName,
+                                "reason", "INSTANCE_NAME_FAILED", "message", instanceNameError));
+                        }
+                    }
+
                     Dictionary<string, object> described = Describe(doc, component, path);
                     described["method"] = method;
+                    described["instanceName"] = string.IsNullOrEmpty(instanceName) ? null : instanceName;
+                    described["instanceNameApplied"] = instanceNameApplied;
+                    if (instanceNameError != null) described["instanceNameError"] = instanceNameError;
                     described["requestedPosition"] = new List<object> { Json.R(x), Json.R(y), Json.R(z) };
                     described["placement"] = placement;
                     if (placement == "origin")
@@ -350,6 +409,7 @@ namespace SwMcp
                     "inserted", inserted,
                     "failed", failed,
                     "skipped", skipped,
+                    "nameFailures", nameFailures,
                     "saved", saved,
                     "saveErrors", saveErrors,
                     "saveWarnings", saveWarnings,
@@ -376,7 +436,8 @@ namespace SwMcp
                 return Json.Dict(
                     "assembly", Json.Dict("title", doc.GetTitle(), "path", doc.GetPathName()),
                     "count", items.Count,
-                    "components", items);
+                    "components", items,
+                    "interference", InterferenceBlock(asm));
             }
         }
 
@@ -520,6 +581,87 @@ namespace SwMcp
                 items.Add(Describe(null, component, null));
             }
             return items;
+        }
+
+        /// <summary>干涉读数：直接问 SOLIDWORKS 的 InterferenceDetectionMgr，不自己判。
+        ///
+        /// 以前这条链一直是空的：verify 的 assembly 档读 geometry.interference，
+        /// 桥接器从来不回这个字段，于是一直记 unmeasured —— 而 CAD 层拿不到数，
+        /// 只能自己用 OBB 近似猜"这两件碰不碰"。OBB 对回转体差得离谱（四瓣整机
+        /// 的瓣与蜗杆轴线是斜交的），±1 mm 的误判会让"能转"变成"卡死"。
+        ///
+        /// 这里给的是布尔交集体积：volume>0 才是真干涉，volume==0 是贴面（装配里
+        /// 大量存在，不能算干涉）。所以 coincidentOnly 单独计数，不混进 count。
+        /// 失败不抛：回 available:false + reason，调用方据此记 unmeasured，
+        /// 而不是把"没量成"当成"没有干涉"。</summary>
+        internal static Dictionary<string, object> InterferenceBlock(IAssemblyDoc asm)
+        {
+            if (asm == null) return Json.Dict("available", false, "reason", "NOT_AN_ASSEMBLY");
+            try
+            {
+                InterferenceDetectionMgr mgr = asm.InterferenceDetectionManager;
+                if (mgr == null)
+                    return Json.Dict("available", false, "reason", "INTERFERENCE_MGR_UNAVAILABLE");
+                try { mgr.TreatCoincidenceAsInterference = false; } catch (COMException) { }
+                try { mgr.IncludeMultibodyPartInterferences = true; } catch (COMException) { }
+                try { mgr.IgnoreHiddenBodies = true; } catch (COMException) { }
+
+                int count = 0, coincident = 0;
+                double totalMm3 = 0;
+                List<object> pairs = new List<object>();
+                Array arr = null;
+                try { arr = mgr.GetInterferences() as Array; } catch (COMException) { }
+                if (arr != null)
+                {
+                    foreach (object entry in arr)
+                    {
+                        IInterference itf = entry as IInterference;
+                        if (itf == null) continue;
+                        bool ignored = false;
+                        try { ignored = itf.Ignore; } catch (COMException) { }
+                        if (ignored) continue;
+                        double volumeMm3 = 0;
+                        try { volumeMm3 = itf.Volume * 1e9; } catch (COMException) { }
+                        List<object> names = new List<object>();
+                        try
+                        {
+                            Array comps = itf.Components as Array;
+                            if (comps != null)
+                            {
+                                foreach (object o in comps)
+                                {
+                                    IComponent2 c = o as IComponent2;
+                                    if (c == null) continue;
+                                    try { names.Add(c.Name2); } catch (COMException) { }
+                                }
+                            }
+                        }
+                        catch (COMException) { }
+                        bool touching = volumeMm3 <= 1e-6;
+                        if (touching) coincident++; else { count++; totalMm3 += volumeMm3; }
+                        pairs.Add(Json.Dict(
+                            "components", names,
+                            "volumeMm3", Json.R(volumeMm3),
+                            "coincidentOnly", touching));
+                    }
+                }
+                try { mgr.Done(); } catch (COMException) { }
+                return Json.Dict(
+                    "available", true,
+                    "count", count,
+                    "volumeMm3", Json.R(totalMm3),
+                    "coincidentCount", coincident,
+                    "pairs", pairs,
+                    "rule", "volume>0 才算干涉；volume==0 是贴面，记在 coincidentCount");
+            }
+            catch (COMException ex)
+            {
+                return Json.Dict("available", false, "reason", "INTERFERENCE_FAILED", "message", ex.Message);
+            }
+            catch (InvalidCastException ex)
+            {
+                return Json.Dict("available", false, "reason", "INTERFERENCE_FAILED", "message", ex.Message);
+            }
         }
 
         static Dictionary<string, object> Describe(IModelDoc2 doc, IComponent2 component, string fallbackPath)
