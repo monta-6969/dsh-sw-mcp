@@ -36,11 +36,12 @@ namespace SwMcp
                 case "planes": return PlaneList(req);
                 case "helix": return Helix(req);
                 case "minDistance": return MinDistance(req);
+                case "clearance": return Clearance(req);
                 default:
                     throw new BridgeError("BAD_ARGUMENT",
                         "measure kind \"" + kind + "\" is not supported",
                         Json.Dict("kinds", Json.List("faces", "cylinders", "holes", "axis",
-                            "spacing", "distance", "planes", "helix", "minDistance")));
+                            "spacing", "distance", "planes", "helix", "minDistance", "clearance")));
             }
         }
 
@@ -1413,6 +1414,194 @@ namespace SwMcp
                 }
             }
             return entities;
+        }
+
+        /// <summary>间隙判定（布尔法）：把 A 偏置 clearance 得到 A′，与 B 求交。
+        ///
+        /// 为什么不用"数值型最小距离"：`IMeasure.Distance` 对两张圆柱面回的是轴线距
+        /// （Ø20 两圆柱表面间隙 5.000，它回 25.000），语义不可靠。改成布尔：
+        ///   A 偏置 x 后与 B 的交集体积 == 0  ⇒ 间隙 ≥ x
+        ///   交集体积 &gt; 0                    ⇒ 间隙 &lt; x
+        /// 用的是已经校准过的「交集体积」那把尺（算例 R-BOX-4000 / R-BOX-6000）。
+        ///
+        /// API：IBody2.MakeOffset(distance, direction) → 偏置体；
+        ///      offsetBody.Operations2(SWBODYINTERSECT=15901, targetBody, out err) → 结果体集合。
+        /// 体体积用 IBody2.GetMassProperties 的第一个分量（debug:true 会把整组原始值摊出来）。</summary>
+        static Dictionary<string, object> Clearance(Dictionary<string, object> req)
+        {
+            Dictionary<string, object> a = Json.Obj(req["a"]);
+            Dictionary<string, object> b = Json.Obj(req["b"]);
+            double clearanceMm = Json.Dbl(req, "clearanceMm", 0);
+            if (a == null || b == null || !(clearanceMm > 0))
+                throw new BridgeError("BAD_ARGUMENT",
+                    "measure kind=clearance needs {\"clearanceMm\": >0}, \"a\" and \"b\"",
+                    Json.Dict("example", Json.Dict("clearanceMm", 0.5,
+                        "a", Json.Dict("component", "shaft-1"), "b", Json.Dict("component", "housing-1"))));
+
+            using (SwHost h = SwHost.Attach())
+            {
+                bool fallback;
+                IModelDoc2 doc = Operations.OptionalDesignDocument(h, req, "measure.clearance", out fallback);
+                bool debug = Json.Bool(req, "debug", false);
+                List<IBody2> bodiesA = BodiesOf(doc, a, "a");
+                List<IBody2> bodiesB = BodiesOf(doc, b, "b");
+                if (bodiesA.Count == 0) throw new BridgeError("NO_GEOMETRY", "a 端没有实体", Json.Dict("side", "a"));
+                if (bodiesB.Count == 0) throw new BridgeError("NO_GEOMETRY", "b 端没有实体", Json.Dict("side", "b"));
+
+                double offsetM = SwHost.ToMeters(clearanceMm);
+                List<object> pairs = new List<object>();
+                object volumeProbe = null;
+                double totalMm3 = 0;
+                int resultBodies = 0;
+                int offsetFailures = 0;
+                foreach (IBody2 source in bodiesA)
+                {
+                    IBody2 offset = null;
+                    string directionUsed = null;
+                    try { offset = source.MakeOffset(offsetM, true); directionUsed = "true"; }
+                    catch (COMException) { }
+                    if (offset == null)
+                    {
+                        try { offset = source.MakeOffset(offsetM, false); directionUsed = "false"; }
+                        catch (COMException) { }
+                    }
+                    if (offset == null)
+                    {
+                        offsetFailures++;
+                        continue;
+                    }
+                    foreach (IBody2 target in bodiesB)
+                    {
+                        int errorCode = 0;
+                        object raw = null;
+                        try { raw = offset.Operations2(15901, target, out errorCode); }
+                        catch (COMException ex)
+                        {
+                            pairs.Add(Json.Dict("error", "BOOLEAN_THREW", "message", ex.Message));
+                            continue;
+                        }
+                        Array made = raw as Array;
+                        int count = made == null ? 0 : made.Length;
+                        double volumeMm3 = 0;
+                        if (made != null)
+                        {
+                            foreach (object entry in made)
+                            {
+                                IBody2 piece = entry as IBody2;
+                                if (piece == null) continue;
+                                double[] mp = null;
+                                // GetMassProperties(Density) 的返回值是数组，密度给 1 时质量数值上等于体积。
+                                try { mp = piece.GetMassProperties(1.0) as double[]; } catch (COMException) { }
+                                if (mp != null && mp.Length > 0)
+                                {
+                                    // 布局取「体积」那一格：SW 的数组里体积固定在第 4 位（mp[3]），
+                                    // 短数组退回 mp[0]；debug:true 会把整组原始值摊出来，便于复核。
+                                    double v = mp.Length > 3 ? mp[3] : mp[0];
+                                    // 米³ → 毫米³；GetMassProperties 若不按 SI 给，这里会大得离谱，
+                                    // 所以只在合理区间内采信（< 1e6 mm³ 的单块）。
+                                    if (v > 0)
+                                    {
+                                        if (v < 1e-3) v = v * 1e9; else if (v < 1) v = v * 1000.0;
+                                        volumeMm3 += v;
+                                    }
+                                }
+                                if (debug && volumeProbe == null && mp != null) volumeProbe = ToDoubleList(mp);
+                            }
+                        }
+                        if (volumeMm3 > 1e-6) { totalMm3 += volumeMm3; resultBodies += count; }
+                        pairs.Add(Json.Dict(
+                            "offsetDirection", directionUsed,
+                            "booleanError", errorCode,
+                            "resultBodies", count,
+                            "intersectVolumeMm3", Json.R(volumeMm3)));
+                    }
+                }
+
+                if (offsetFailures == bodiesA.Count)
+                    throw new BridgeError("CLEARANCE_OFFSET_FAILED",
+                        "MakeOffset 对所有 a 端实体都返回空：这个实体可能不是封闭实体或多实体",
+                        Json.Dict("bodiesA", bodiesA.Count));
+
+                return Operations.MarkDocumentFallback(Json.Dict(
+                    "kind", "clearance",
+                    "clearanceMm", Json.R(clearanceMm),
+                    "intersectVolumeMm3", Json.R(totalMm3),
+                    "intersectBodies", resultBodies,
+                    "verdict", totalMm3 > 1e-6 ? "lt(clearance)" : "ge(clearance)",
+                    "rule", "交集体积 = 0 ⇒ 间隙 ≥ clearance；> 0 ⇒ 间隙 < clearance",
+                    "pairs", pairs,
+                    "method", "IBody2.MakeOffset + IBody2.Operations2(SWBODYINTERSECT) + IBody2.GetMassProperties",
+                    "debugVolumeProbe", volumeProbe,
+                    "a", Json.Dict("component", Json.Str(a, "component", null), "body", a.ContainsKey("body") ? a["body"] : null),
+                    "b", Json.Dict("component", Json.Str(b, "component", null), "body", b.ContainsKey("body") ? b["body"] : null),
+                    "document", DocInfo(doc)), doc, fallback);
+            }
+        }
+
+        static List<object> ToDoubleList(double[] values)
+        {
+            List<object> list = new List<object>();
+            if (values == null) return list;
+            foreach (double v in values) list.Add(Json.R(v));
+            return list;
+        }
+
+        /// <summary>端点 → 实体列表（装配按组件名，零件按 body 序号）。</summary>
+        static List<IBody2> BodiesOf(IModelDoc2 doc, Dictionary<string, object> spec, string which)
+        {
+            if (!string.IsNullOrEmpty(Json.Str(spec, "face", null)))
+                throw new BridgeError("UNSUPPORTED_PARAM",
+                    "clearance 的 " + which + ".face 还没实现：用 component=\"名字\" 或 body=序号",
+                    Json.Dict("which", which));
+            List<IBody2> bodies = new List<IBody2>();
+            string componentName = Json.Str(spec, "component", null);
+            if (!string.IsNullOrEmpty(componentName))
+            {
+                IAssemblyDoc asm = doc as IAssemblyDoc;
+                if (asm == null)
+                    throw new BridgeError("BAD_ARGUMENT",
+                        which + ".component 只对装配体有意义：这是零件文档，用 body=序号", Json.Dict("which", which));
+                IComponent2 component = asm.GetComponentByName(componentName);
+                if (component == null)
+                    throw new BridgeError("COMPONENT_NOT_FOUND",
+                        "装配里没有名为 \"" + componentName + "\" 的组件（用 inspect action=\"assembly\" 看真实组件名）",
+                        Json.Dict("which", which, "component", componentName));
+                Array raw = null;
+                try { raw = component.GetBodies2((int)swBodyType_e.swSolidBody) as Array; } catch (COMException) { }
+                if (raw != null)
+                    foreach (object o in raw)
+                    {
+                        IBody2 body = o as IBody2;
+                        if (body != null) bodies.Add(body);
+                    }
+            }
+            else
+            {
+                IPartDoc part = doc as IPartDoc;
+                if (part == null)
+                    throw new BridgeError("BAD_ARGUMENT",
+                        which + " 需要一个 component 名（装配体）或 body 序号（零件）", Json.Dict("which", which));
+                Array raw = null;
+                try { raw = part.GetBodies2((int)swBodyType_e.swSolidBody, false) as Array; } catch (COMException) { }
+                if (raw != null)
+                    foreach (object o in raw)
+                    {
+                        IBody2 body = o as IBody2;
+                        if (body != null) bodies.Add(body);
+                    }
+                if (spec.ContainsKey("body"))
+                {
+                    int index = (int)Json.Dbl(spec, "body", 0);
+                    if (index < 0 || index >= bodies.Count)
+                        throw new BridgeError("BODY_NOT_FOUND",
+                            "实体序号 " + index + " 越界（这个文档有 " + bodies.Count + " 个实体）",
+                            Json.Dict("which", which, "bodies", bodies.Count));
+                    IBody2 only = bodies[index];
+                    bodies = new List<IBody2>();
+                    bodies.Add(only);
+                }
+            }
+            return bodies;
         }
 
         static int DominantAxis(double[] d)

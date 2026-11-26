@@ -345,6 +345,8 @@
 | `componentRotate frame="local"` | missing | 只用 global/显式旋转点；标 `frame_fallback` |
 | 装配 DOF/干涉读数 | 干涉 **available（已校准）**；DOF 近似 | `inspect action="assembly"` 回 `interference`（布尔交集体积，贴面单列 `coincidentCount`）+ `dof`（按配合类型扣，见 `src/server/dof.mjs`，带 caveats） |
 | 最小距离 `measure kind="minDistance"` | **unverified，禁止引用** | `IMeasure.Distance` 对圆柱面回轴线距（间隙 5.000 实测回 25.000）。间隙要判就用「偏置 + 布尔交」：干涉体积那把尺已校准 |
+| 间隙判定 `measure kind="clearance"` | **未实现，禁止引用** | `IBody2.MakeOffset` 对实体体返回空（只对片体成立），偏置那步做不出来；plan B 是面级解析（plane-plane / cylinder-cylinder 用 `ISurface` 参数直接算）或 Move Face |
+| 干涉体积（`inspect action="assembly"` 的 `interference`） | **已校准** | 算例 `R-BOX-4000`=4000、`R-BOX-6000`=6000（实例 33052）；27588 上另有 I-BOX-4000/6000、I-TOUCH-0、I-SEPARATED-0。算例号必须带实例号 |
 | `helix` / `sweep` / `loft` | **available** | `build` 的定义里或 `model action="helix"|"sweep"|"loft"`；配方见 N11/N12 |
 | 锥齿 `bevel`/`coneAngle`/`faceWidth` | missing（明确报错） | `gear` 基元收到这些键 → `UNSUPPORTED_PARAM`；直齿轮不会冒充锥齿。要锥齿先做「背锥展开 + 大小端放样」，见 N12 |
 | 螺旋齿 `helixAngle` | missing（明确报错） | 同上；齿面螺旋线作引导线还没接 |

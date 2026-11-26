@@ -456,11 +456,13 @@ export function registerObserveTools(server, z, deps) {
             + 'file=文件字节与哈希，geometry=体积/实体数，dimensions=包围盒与各孔径数量，positions=孔心/孔距，'
             + 'topology=单实体与开口边，assembly=组件数与干涉（零件会标 skipped）'),
         measure: z
-          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes', 'helix', 'minDistance']) })
+          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes', 'helix', 'minDistance', 'clearance']) })
           .passthrough()
           .optional()
           .describe('measure 动作要测什么（kind 见 schema；holes 列孔，axis 取轴线位置与高度，spacing 取两孔轴线距离，'
-            + 'distance 取点到面/面的距离，minDistance 取两实体（装配组件或零件多实体）面-面最小距离），'),
+            + 'distance 取点到面/面的距离。**minDistance 与 clearance 都未校准、禁止用于验收**：'
+            + 'minDistance 的 IMeasure.Distance 对圆柱面回轴线距（间隙 5.000 实测回 25.000）；'
+            + 'clearance 的 IBody2.MakeOffset 对实体体返回空，偏置那一步没实现。间隙类判据目前没有可用读数），'),
         figure: z
           .object({
             op: z.enum(['info', 'crop', 'fit', 'frame']).optional().describe('info=只问尺寸；crop=裁一块放大；fit=整图缩到能看清布局；frame=整图加网格'),
