@@ -55,8 +55,10 @@ import {
 // deliver 的「文档从哪儿来」决策是纯函数：多会话关掉文档后按 designId 重开/重建，
 // 判据离线可测（test/deliver-route.mjs），不必起 SOLIDWORKS。
 import {
-  closeTargetFacts, judgeReopenedDocument, normalizeOpenDocuments, planDeliverRoute,
+  closeOutcomeTitle, closeTargetFacts, judgeReopenedDocument, normalizeOpenDocuments, planDeliverRoute,
 } from './deliver-route.mjs'
+// 特征树 → manifest.features[] 的分类（树容器/参考几何不算特征）。纯函数，离线可测。
+import { featuresFromTree } from './feature-tree.mjs'
 import { coerceDefinition } from './definition-arg.mjs'
 
 // 一次工具调用一个关联号，桥接器的每一跳都带上它。这样「这次失败到底发了什么
@@ -6516,7 +6518,9 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
       // close 不在 BROKER_OPS 里：显式走 broker，才能按 designId 落到这条设计的
       // 实例上（通道池下直连桥接器会 INSTANCE_NOT_BOUND）。
       const closed = await callBridge('close', { title: closable.title, allowDirty: true, designId }, { broker: true })
-      state.closedTitle = closed?.closed ?? null
+      // 同一个判据：成功回标题字符串，失败 null。写成布尔判断就会把成功记成失败。
+      state.closedTitle = closeOutcomeTitle(closed)
+      state.closedTitleRaw = closed?.closed ?? null
     } catch (error) {
       state.skipped = 'CLOSE_FAILED'
       state.skippedDetail = { code: error?.code ?? null, message: error?.message ?? String(error) }
@@ -6559,8 +6563,15 @@ async function verifyDeliveredPartFile({ designId, targetPath, project }) {
   if (state.reopened) {
     try {
       const closed = await callBridge('close', { title: state.title, allowDirty: true, designId }, { broker: true })
-      state.closedAfterReadback = closed?.closed === true
-    } catch { state.closedAfterReadback = false }
+      // close 成功回的是**标题字符串**（按前缀关是数组），不是布尔；见
+      // closeOutcomeTitle 的注释 —— 以前这里写 `=== true`，成功也记成 false。
+      const closedTitle = closeOutcomeTitle(closed)
+      state.closedAfterReadback = closedTitle !== null
+      state.closedAfterTitle = typeof closedTitle === 'string' ? closedTitle : state.title
+    } catch (error) {
+      state.closedAfterReadback = false
+      state.closedAfterError = { code: error?.code ?? null, message: error?.message ?? String(error) }
+    }
   }
   try {
     const lock = join(dirname(targetPath), '~$' + basename(targetPath))
@@ -6575,23 +6586,6 @@ function pickFeatures(...candidates) {
     if (Array.isArray(candidate) && candidate.length > 0) return candidate
   }
   return []
-}
-
-/** 交付回读里的特征树 → manifest.features。
- *
- * R-61：features[] 不得为空。建模会话里有意图可以直接抄，子会话交付已有文件时
- * 没有意图，只能从文件读 —— 参数读不回来就如实写 params:null + source，
- * 不编参数，也不写空数组。 */
-function featuresFromTree(tree) {
-  if (!Array.isArray(tree)) return []
-  return tree.map((node) => ({
-    name: node?.name ?? null,
-    kind: node?.type ?? null,
-    id: node?.id ?? null,
-    source: 'file-readback',
-    params: null,
-    note: '参数未记录：这条来自交付文件的特征树回读',
-  }))
 }
 
 /** design.json 是唯一真源：交付成功时把它落到 CAD 旁边，并把这一版期望值一起记下。
@@ -6822,7 +6816,12 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       sessionDocs.delete(designId)
     }
     let designStore = null
-    const readbackFeatures = featuresFromTree(readback?.featureTree)
+    // 回读树里有一半是文档结构（收藏/历史记录/选择集/基准面…）：只把建模特征写进
+    // features[]，过滤回执挂在 readback.featureFilter 上，别让「24 条特征」这种数
+    // 混进证据（sw-native P-0009 实测 24 条里 18 条是结构节点）。
+    const tree = featuresFromTree(readback?.featureTree)
+    const readbackFeatures = tree.features
+    if (readback) readback.featureFilter = tree.filter
     if (wrote && fileCheck.ok && swReadback?.block) {
       try {
         const projectNow = readProject(designId)
@@ -6841,7 +6840,7 @@ async function deliverPartFile({ designId, path: targetPath, started }) {
       if (designStore === null) {
         try {
           designStore = {
-            ...applyDeliveryReadback({ cadPath: targetPath, sw: swReadback.block, features: readbackFeatures }),
+            ...applyDeliveryReadback({ cadPath: targetPath, sw: swReadback.block, features: readbackFeatures, featureFilter: tree.filter }),
             viaReadbackMerge: true,
           }
         } catch (error) {

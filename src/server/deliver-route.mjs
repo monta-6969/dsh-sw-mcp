@@ -207,6 +207,40 @@ export function judgeReopenedDocument({ kind = 'part', bodies = null, components
 }
 
 /**
+ * close 回包的「到底关掉没有」判据（纯函数）。
+ *
+ * 桥接器 close 有三个成功/失败形状，写代码时很容易只看一种：
+ *   - 按标题关：`{closed:"<标题>", found:true}` —— closed 是**字符串**，不是布尔；
+ *   - 按路径前缀关：`{closed:["<标题>", ...], closedCount:n}` —— closed 是数组；
+ *   - 没找到这份文档：`{closed:null, found:false}`；
+ *   - 脏文档被拒：抛 DOCUMENT_DIRTY / USER_DOC_DIRTY（不走这里）。
+ *
+ * 以前交付回读一律写 `closed?.closed === true`，于是**每一次成功的按标题关闭都被
+ * 记成 false**，和同一份证据里的 lockFileAfter:"absent" 正面矛盾（sw-native 交付
+ * 实测 P-0009：closedAfterReadback:false 而 ~$ 锁不存在）。两个字段都是给人当证据
+ * 看的，矛盾比缺失更坏 —— 所以统一在入口把三种形状折成「标题 | true | null」。
+ *
+ * 返回字符串 = 关掉了它；true = 桥接器说成功但没给标题；null = 没关掉。
+ */
+export function closeOutcomeTitle(result) {
+  const value = result?.closed
+  if (typeof value === 'string') return value.length > 0 ? value : null
+  if (Array.isArray(value)) {
+    if (value.length === 0) return null
+    const first = value[0]
+    if (typeof first === 'string') return first
+    if (typeof first?.title === 'string') return first.title
+    return true
+  }
+  if (value === true) {
+    const list = Array.isArray(result?.closedDocuments) ? result.closedDocuments : []
+    if (typeof list[0]?.title === 'string') return list[0].title
+    return true
+  }
+  return null
+}
+
+/**
  * 保存后关掉重开之前，先确认「按标题关」关的就是目标路径这一份。
  * SOLIDWORKS 的 close 只按标题找；同名不同目录的两份同时开着时按标题关会关错，
  * 所以只有在标题唯一且路径完全一致时才允许关。

@@ -379,3 +379,16 @@ bug 都贵，因为下游会按「回包里有没有那个东西」立规则，�
 `bodies / faces / volume_mm3 / mass_g（带 massBasis）/ bbox_mm / saved_at / reopened_at /
 volume_after_reopen_mm3 / delta_pct`。拿不到就失败，不写 null。
 写 manifest 之外的补充读数（例如自己要的验收表）放 `verify.json`，但那**不能替 deliver 签收**。
+
+`features[]` 只收**建模特征**（草图 / 拉伸 / 切除 / 阵列…）。特征树里的
+收藏、历史记录、选择集、传感器、注解、实体、曲面实体、材质、设计活页夹、Tables
+是文档结构，三个默认基准面和原点是参考几何 —— 都不算这个件的特征，一律不进
+`features[]`。剔掉了多少、叫什么名字写在交付响应的 `readback.featureFilter` 和
+manifest 的 `delivery.featuresDropped` 里：过滤可以有，静默过滤不行。
+判据只按 `kind`（`*Folder` / `DetailCabinet` = 结构；`RefPlane|RefAxis|RefPoint|
+OriginProfileFeature|CoordSystem` = 参考几何），不按界面语言下的名字。
+
+同一份交付证据里 `closedAfterReadback` 与 `lockFileAfter` 不许互相打脸：
+桥接器 `close` 成功回的是**标题字符串**（按路径前缀关是数组），不是布尔；
+判成功要过 `closeOutcomeTitle()`，不能写 `closed === true`（那样每次成功都记成 false，
+而 `~$` 锁又确实不在 —— sw-native 实件实测）。

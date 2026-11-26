@@ -301,7 +301,7 @@ export function evaluateTiers({ tiers, design, manifest, cadPath, cadHash, geome
  * 这里不依赖定义：只把回读的事实并进那份 manifest，其余字段原样保留。
  * 不写 null：没有 sw 就不动这个字段，让"没读"和"读了没通路"两种失败都能被看见。
  */
-export function applyDeliveryReadback({ cadPath, sw = null, features = null, now = new Date().toISOString() }) {
+export function applyDeliveryReadback({ cadPath, sw = null, features = null, featureFilter = null, now = new Date().toISOString() }) {
   const manifestPath = manifestFileFor(cadPath)
   const manifest = readJsonFile(manifestPath)
   if (!manifest) return { updated: false, reason: 'NO_MANIFEST', manifestPath }
@@ -317,6 +317,15 @@ export function applyDeliveryReadback({ cadPath, sw = null, features = null, now
       at: now,
       swSource: sw == null ? null : 'close-open-readback',
       featureCount: nextFeatures.length,
+      // 过滤回执：features[] 只收建模特征，树容器/参考几何被剔掉多少条、叫什么名字，
+      // 都留在这里。过滤本身不算证据，被过滤掉的东西才是 —— 不写就成了静默丢。
+      featuresDropped: featureFilter
+        ? {
+          structure: Array.isArray(featureFilter.structure) ? featureFilter.structure : [],
+          reference: Array.isArray(featureFilter.reference) ? featureFilter.reference : [],
+          treeCount: featureFilter.treeCount ?? null,
+        }
+        : null,
     },
   }
   writeJsonAtomic(manifestPath, next)

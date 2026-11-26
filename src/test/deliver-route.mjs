@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { dirname, join } from 'node:path'
 import {
-  DELIVER_SOURCES, closeTargetFacts, judgeReopenedDocument, matchOpenDeliverDocument,
+  DELIVER_SOURCES, closeOutcomeTitle, closeTargetFacts, judgeReopenedDocument, matchOpenDeliverDocument,
   normalizeOpenDocuments, partIdOf, planDeliverRoute,
 } from '../server/deliver-route.mjs'
 
@@ -235,6 +235,19 @@ check('回包带 delivery{saved,bytes,designId,source,elapsedMs}（顶层与 cha
   && serverSource.includes('elapsedMs,'))
 check('拿不到打开清单时按"未知"处理，不硬判成没开',
   serverSource.includes('openDocuments: enrichOpenDocuments(await listOpenDocumentsForDeliver(designId))'))
+
+// close 回包的成功判据：按标题关回的是标题**字符串**，不是布尔。以前一律写
+// `closed?.closed === true`，成功的关闭全被记成 false，和 lockFileAfter:"absent"
+// 自相矛盾（sw-native 交付实测）。
+check('close 回"标题字符串"算关掉了', closeOutcomeTitle({ closed: 'P-0009.SLDPRT', found: true }) === 'P-0009.SLDPRT')
+check('close 回数组算关掉了，取第一条标题', closeOutcomeTitle({ closed: ['A.SLDPRT'], closedCount: 1 }) === 'A.SLDPRT')
+check('close 回 null 算没关掉', closeOutcomeTitle({ closed: null, found: false }) === null)
+check('空字符串不当成功', closeOutcomeTitle({ closed: '' }) === null)
+check('空数组不当成功', closeOutcomeTitle({ closed: [] }) === null)
+check('桥接器只说 true 时仍算成功（返回 true 而不是 null）', closeOutcomeTitle({ closed: true }) === true)
+check('回包里没有 closed 字段算没关掉', closeOutcomeTitle({}) === null && closeOutcomeTitle(null) === null)
+check('server 的关闭判据走同一个函数（不再写 === true）',
+  serverSource.includes('closeOutcomeTitle(closed)') && !serverSource.includes('closed?.closed === true'))
 
 console.log(`\n${pass} passed, ${fail} failed`)
 if (fail > 0) process.exitCode = 1
