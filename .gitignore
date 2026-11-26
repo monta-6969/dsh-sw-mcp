@@ -33,6 +33,9 @@ test/out/
 test/.state/
 test/*.exe
 
+# 会话交接凭据：断线时接手的人读它继续，属于本机过程记录，不入库
+_state.md
+
 # Python 字节码与虚拟环境
 .venv/
 __pycache__/
