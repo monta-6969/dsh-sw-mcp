@@ -23,12 +23,21 @@ namespace SwMcp
             int instanceIndex = Array.IndexOf(args, "--instance");
             if (instanceIndex >= 0 && instanceIndex + 1 < args.Length)
             {
+                string value = args[instanceIndex + 1];
                 int pid;
-                if (int.TryParse(args[instanceIndex + 1], out pid) && pid > 0)
-                    SwHost.ExpectedPid = pid;
+                // "auto" = 只在 ROT 里恰好一个实例时绑定（见 SwHost.AutoBind）。
+                // 其它非数字值直接拒绝：以前它是被静默忽略的，于是调用方以为
+                // 「我点名了实例」，桥接器却按未绑定处理 —— 一份参数两种理解。
+                if (int.TryParse(value, out pid) && pid > 0) SwHost.ExpectedPid = pid;
+                else if (string.Equals(value, "auto", StringComparison.OrdinalIgnoreCase)) SwHost.AutoBind = true;
+                else
+                {
+                    Console.Error.WriteLine("--instance expects a positive pid or \"auto\", got \"" + value + "\"");
+                    return 2;
+                }
             }
             // 两者同时给出是自相矛盾的请求：宁可拒绝，也不要猜调用方想要哪个。
-            if (SwHost.NoAttach && SwHost.ExpectedPid != 0)
+            if (SwHost.NoAttach && (SwHost.ExpectedPid != 0 || SwHost.AutoBind))
             {
                 Console.Error.WriteLine("--no-attach and --instance are mutually exclusive");
                 return 2;

@@ -21,6 +21,8 @@ namespace SwMcp
         readonly IModelDoc2 _doc;
         readonly ISketchManager _sk;
         readonly List<string> _steps = new List<string>();
+        // 全局轴（x/y/z）每次构建只建一条参考轴，后面同一个方向复用。
+        readonly Dictionary<string, IFeature> _globalAxes = new Dictionary<string, IFeature>();
         IFeature _lastSketch;
 
         public Builder(SwHost host, IModelDoc2 doc)
@@ -564,11 +566,15 @@ namespace SwMcp
             // the argument that actually decides the side, so "reverse" moves there
             // and Flip stays false.
             double beforeVolume = SafeVolume();
+            // 拔模角只有在 Dchk1/Dchk2（「允许方向 1/2 拔模」）为 true 时才生效。
+            // 之前这两个开关写死 false，draft=10° 的形状与 draft=0 逐位相同（同一个
+            // Ø10×20 圆柱 1570.7963 mm³），调用方拿到的仍是 ok —— 参数被吃掉却不报错。
+            bool draftOn = Math.Abs(draftDeg) > 1e-9;
             IFeature feature = _doc.FeatureManager.FeatureExtrusion3(
                 single, false, !reverse,
                 end, (int)swEndConditions_e.swEndCondBlind,
                 d1, d2,
-                false, false, false, false, draft, 0,
+                draftOn, draftOn, false, false, draft, draftOn && symmetric ? draft : 0,
                 false, false, false, false,
                 true, false, true,
                 startOffsetMm == 0 ? 0 : (int)swStartConditions_e.swStartOffset,
@@ -695,26 +701,44 @@ namespace SwMcp
         /// The axis mark is not documented consistently: some samples select the
         /// construction line with mark 0, others with mark 4. Rather than guess, try
         /// both and keep the one that produced a feature.</summary>
-        public IFeature RevolveSketch(IFeature sketch, double angleDeg, bool cut)
+        public IFeature RevolveSketch(IFeature sketch, double angleDeg, bool cut, string axisName)
         {
             if (sketch == null) throw new BridgeError("NO_SKETCH", "no profile sketch to revolve");
-            ISketchSegment axis = FindCenterline(sketch);
+            string axis = (axisName ?? "centerline").Trim().ToLowerInvariant();
+            if (axis != "centerline")
+            {
+                IFeature axisFeature = GlobalAxis(axis);
+                _doc.ClearSelection2(true);
+                sketch.Select2(false, 0);
+                // 参考轴放进选集后按 mark 4 尝试，与中心线的两种 mark 约定一致：
+                // FeatureRevolve2 只认「草图 + 轴」这个组合，mark 值随版本不同。
+                foreach (int mark in new[] { 0, 4 })
+                {
+                    _doc.ClearSelection2(true);
+                    sketch.Select2(false, 0);
+                    axisFeature.Select2(true, mark);
+                    IFeature made = RevolveOnce(angleDeg, cut);
+                    if (made != null)
+                    {
+                        _steps.Add("revolve about global " + axis + " via " + axisFeature.Name);
+                        VerifyGrowth(cut ? "RevolveCut" : "Revolve", 0);
+                        return made;
+                    }
+                }
+                throw new BridgeError("REVOLVE_FAILED",
+                    "FeatureRevolve2 returned null about the explicit \"" + axis + "\" axis (" + axisFeature.Name
+                    + "); the profile has to lie entirely on one side of that axis");
+            }
 
+            ISketchSegment axisSeg = FindCenterline(sketch);
             int[] marks = new[] { 0, 4 };
             foreach (int mark in marks)
             {
                 _doc.ClearSelection2(true);
                 sketch.Select2(false, 0);
-                if (axis != null) axis.Select2(true, mark);
+                if (axisSeg != null) axisSeg.Select2(true, mark);
 
-                IFeature feature = _doc.FeatureManager.FeatureRevolve2(
-                    true, true, false, cut, false, false,
-                    (int)swEndConditions_e.swEndCondBlind, (int)swEndConditions_e.swEndCondBlind,
-                    angleDeg * Math.PI / 180.0, 0,
-                    false, false, 0, 0,
-                    (int)swThinWallType_e.swThinWallOneDirection, 0, 0,
-                    true, true, true);
-
+                IFeature feature = RevolveOnce(angleDeg, cut);
                 _steps.Add("genericRevolve axisMark=" + mark + " angle=" + angleDeg
                     + " -> " + (feature == null ? "NULL" : feature.Name));
                 if (feature != null)
@@ -725,7 +749,61 @@ namespace SwMcp
             }
             throw new BridgeError("REVOLVE_FAILED",
                 "FeatureRevolve2 returned null with both axis selection marks; the profile "
-                + "must lie entirely on one side of its centreline");
+                + "must lie entirely on one side of its centreline. To revolve about a global "
+                + "axis pass axis=\"x\" / \"y\" / \"z\" and leave the sketch without a centreline.");
+        }
+
+        IFeature RevolveOnce(double angleDeg, bool cut)
+        {
+            return _doc.FeatureManager.FeatureRevolve2(
+                true, true, false, cut, false, false,
+                (int)swEndConditions_e.swEndCondBlind, (int)swEndConditions_e.swEndCondBlind,
+                angleDeg * Math.PI / 180.0, 0,
+                false, false, 0, 0,
+                (int)swThinWallType_e.swThinWallOneDirection, 0, 0,
+                true, true, true);
+        }
+
+        /// <summary>Creates (once per build) a reference axis for a global direction.
+        ///
+        /// 全局轴不是可选实体：X/Y/Z 是默认基准面两两相交的线。以前 revolve 只认
+        /// 「草图里的构造线」，于是 axis="z" 这种请求看起来被接受、实际绕的是草图
+        /// 里的那条线（或者干脆失败）。现在按 axis 建一条真的参考轴，选择它再转。</summary>
+        IFeature GlobalAxis(string axis)
+        {
+            if (axis != "x" && axis != "y" && axis != "z")
+                throw new BridgeError("UNSUPPORTED_PARAM",
+                    "revolve axis=\"" + axis + "\" is not supported; use centerline, x, y or z",
+                    Json.Dict("param", "axis", "value", axis, "supported", Json.List("centerline", "x", "y", "z")));
+            if (_globalAxes.ContainsKey(axis)) return _globalAxes[axis];
+
+            // 默认基准面序号：0=前视(XY) 1=上视(XZ) 2=右视(YZ)。
+            // X = 前视∩上视，Y = 前视∩右视，Z = 上视∩右视。
+            int[] pair = axis == "x" ? new[] { 0, 1 } : axis == "y" ? new[] { 0, 2 } : new[] { 1, 2 };
+            IFeature first = SwHost.RefPlane(_doc, pair[0]);
+            IFeature second = SwHost.RefPlane(_doc, pair[1]);
+            if (first == null || second == null)
+                throw new BridgeError("NO_REF_PLANE",
+                    "cannot build the global " + axis + " axis: default reference planes "
+                    + pair[0] + "/" + pair[1] + " are missing from this template");
+            _doc.ClearSelection2(true);
+            first.Select2(false, 0);
+            second.Select2(true, 0);
+            // InsertAxis2 在 IModelDoc2 上（IFeatureManager 没有这个成员），返回 bool：
+            // 选中「两个平面」之后它建一条参考轴特征，名字要从特征树里取回来。
+            int before = SwHost.Features(_doc).Count;
+            bool madeAxis = _doc.InsertAxis2(true);
+            if (!madeAxis)
+                throw new BridgeError("AXIS_CREATE_FAILED",
+                    "InsertAxis2 returned false for the intersection of planes "
+                    + pair[0] + " and " + pair[1] + "; select exactly two planes first");
+            List<IFeature> after = SwHost.Features(_doc);
+            IFeature created = after.Count > before ? after[after.Count - 1] : null;
+            if (created == null)
+                throw new BridgeError("AXIS_CREATE_FAILED", "the axis feature was not added to the tree");
+            _steps.Add("global axis " + axis + " -> " + created.Name);
+            _globalAxes[axis] = created;
+            return created;
         }
 
         static ISketchSegment FindCenterline(IFeature sketchFeature)

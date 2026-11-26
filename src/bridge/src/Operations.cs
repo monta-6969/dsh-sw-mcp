@@ -29,7 +29,7 @@ namespace SwMcp
             "assemblyNew", "componentInsert", "components", "assemblyFaces", "mates", "mate", "mateDelete", "mateLock", "componentLock", "componentRotate", "componentTranslate",
             "drawingNew", "drawingViews", "quit", "measure", "sketchGeometry",
             "object", "batch", "snapshot", "instances", "patternCircular", "ui",
-            "dimensions",
+            "dimensions", "feature",
         };
 
         /// <summary>Ops that neither read nor move the shared SOLIDWORKS state, so they
@@ -68,7 +68,15 @@ namespace SwMcp
             // ROT 清单，而 Instances() 自己会在 attachFree 下跳过 activePid 读取。
             // 其它 op 在 --no-attach 下会走各自内部的 SwHost.Attach()，从而拿到明确的
             // INSTANCE_NOT_BOUND，而不是偷偷连上一个实例。
-            bool attachAllowed = !pureRequest && !SwHost.NoAttach;
+            //
+            // LockFree 名单必须一起排除：那几条 op 的契约是「不碰共享状态、可以在
+            // 别人建模时回答」（见上面的注释），但这里曾经对它们照样 Attach()，于是
+            // status / instances（ROT 与登记表的诊断读数）在未绑定的 worker 上直接
+            // 抛 INSTANCE_NOT_BOUND —— 一个只读诊断因为拿不到实例而整条失败。两份
+            // 名单现在同源：LockFree 的 op 真的不 attach；需要文档的 op 自己 attach，
+            // 失败信息仍然明确。
+            bool lockFree = Array.IndexOf(LockFree, op) >= 0;
+            bool attachAllowed = !pureRequest && !SwHost.NoAttach && !lockFree;
             int pid = 0;
             bool wasMinimized = false;
             // 用户当时在看哪一份文档。任何改文档的操作都要先把目标文档切到前台
@@ -155,6 +163,7 @@ namespace SwMcp
                     catch (Exception) { RollbackBuild(req); throw; }
                 case "edit": return Edit(req);
                 case "patternCircular": return PatternCircular(req);
+                case "feature": return FeatureOp(req);
                 case "ui": return Ui(req);
                 case "save": return Save(req);
                 case "export": return Export(req);
@@ -773,6 +782,172 @@ namespace SwMcp
         /// consumes whatever is selected when it is called; an implicit selection
         /// left over from a previous op is how a pattern lands on the wrong feature.
         /// </summary>
+        // ------------------------------------------------------- helix/sweep/loft
+
+        /// <summary>Applies one helix / sweep / loft to the current design document.
+        ///
+        /// The declarative compiler already understands these three as features
+        /// inside a design definition; this op is the interactive counterpart: the
+        /// sketches and curves are already in the tree (built by build / sketch), and
+        /// the request names them by feature name (which for compiled features is the
+        /// design id). It exists because the tool face must offer them as *actions* —
+        /// "build the whole part again" is not an acceptable way to add a thread.
+        ///
+        /// Nothing here guesses: a missing sketch, an unknown kind, an unsupported
+        /// argument all throw with the name that failed. Parameters are passed through
+        /// to Sweeps, which enumerates the accepted strings itself.</summary>
+        Dictionary<string, object> FeatureOp(Dictionary<string, object> req)
+        {
+            using (SwHost h = SwHost.Attach())
+            {
+                string designId = Json.Str(req, "designId", null);
+                IModelDoc2 doc = RequireDesignDocument(h, designId, "feature");
+                Dictionary<string, object> f = Json.Obj(req.ContainsKey("feature") ? req["feature"] : req);
+                if (f == null)
+                    throw new BridgeError("BAD_ARGUMENT", "feature needs a \"feature\" object");
+                string kind = Json.Str(f, "kind", null);
+                if (string.IsNullOrEmpty(kind))
+                    throw new BridgeError("BAD_ARGUMENT",
+                        "feature.kind is required (helix | sweep | loft)");
+
+                Sweeps sweeps = new Sweeps(h, doc);
+                double before = Geometry.TotalVolumeMm3(doc);
+                IFeature made;
+                string id = Json.Str(f, "id", null);
+
+                if (string.Equals(kind, "helix", StringComparison.OrdinalIgnoreCase))
+                {
+                    IFeature baseSketch = RequiredFeature(doc, Json.Str(f, "profile", Json.Str(f, "sketch", null)), "profile");
+                    made = sweeps.Helix(baseSketch,
+                        Json.Str(f, "definedBy", "heightAndPitch"),
+                        Json.Bool(f, "reversed", false), Json.Bool(f, "clockwise", false),
+                        Json.Bool(f, "tapered", false), Json.Bool(f, "outward", false),
+                        Json.Dbl(f, "height", 0), Json.Dbl(f, "pitch", 0),
+                        Json.Dbl(f, "revolutions", 0), Json.Dbl(f, "taperAngle", 0),
+                        Json.Dbl(f, "startAngle", 0));
+                }
+                else if (string.Equals(kind, "sweep", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kind, "sweptCut", StringComparison.OrdinalIgnoreCase))
+                {
+                    bool circular = Json.Bool(f, "circularProfile", false);
+                    IFeature profile = circular ? null
+                        : RequiredFeature(doc, Json.Str(f, "profile", null), "profile");
+                    IFeature path = RequiredFeature(doc, Json.Str(f, "path", null), "path");
+                    List<IFeature> guides = NamedFeatures(doc, f.ContainsKey("guides") ? f["guides"] : null, "guides");
+                    bool cut = string.Equals(kind, "sweptCut", StringComparison.OrdinalIgnoreCase)
+                        || Json.Bool(f, "cut", false);
+                    made = sweeps.Sweep(profile, path, guides, cut ? "cut" : "boss",
+                        Json.Bool(f, "thin", false), Json.Dbl(f, "thickness", 0), Json.Dbl(f, "thickness2", 0),
+                        Json.Str(f, "thinType", "oneDirection"), Json.Bool(f, "reverseThickness", false),
+                        Json.Bool(f, "propagate", true), Json.Bool(f, "alignment", true),
+                        Json.Str(f, "twistControl", "followPath"), Json.Dbl(f, "twist", 0),
+                        Json.Str(f, "startMatch", "none"), Json.Str(f, "endMatch", "none"),
+                        Json.Bool(f, "advancedSmoothing", true), Json.Bool(f, "merge", true),
+                        circular, Json.Dbl(f, "circularDiameter", 0), Json.Bool(f, "reverseDirection", false));
+                }
+                else if (string.Equals(kind, "loft", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(kind, "loftedCut", StringComparison.OrdinalIgnoreCase))
+                {
+                    List<IFeature> sections = NamedFeatures(doc, f.ContainsKey("sections") ? f["sections"] : null, "sections");
+                    if (sections.Count == 0)
+                        throw new BridgeError("BAD_ARGUMENT", "loft needs \"sections\": [feature names]");
+                    List<IFeature> guides = NamedFeatures(doc, f.ContainsKey("guides") ? f["guides"] : null, "guides");
+                    string mode = string.Equals(kind, "loftedCut", StringComparison.OrdinalIgnoreCase)
+                        ? "cut" : Json.Str(f, "mode", "boss");
+                    made = sweeps.Loft(sections, mode, guides,
+                        Json.Bool(f, "closed", false), Json.Bool(f, "keepTangency", false),
+                        Json.Bool(f, "thin", false), Json.Dbl(f, "thickness", 0), Json.Dbl(f, "thickness2", 0),
+                        Json.Str(f, "thinType", "oneDirection"), Json.Bool(f, "merge", true),
+                        Json.Bool(f, "advancedSmoothing", true), Json.Int(f, "startMatch", 0),
+                        Json.Int(f, "endMatch", 0), Json.Dbl(f, "tessTolerance", 1));
+                }
+                else
+                {
+                    throw new BridgeError("INVALID_ARGUMENT",
+                        "feature.kind=\"" + kind + "\" is not one of helix, sweep, sweptCut, loft, loftedCut");
+                }
+
+                if (made == null)
+                    throw new BridgeError("FEATURE_FAILED", "the " + kind + " produced no feature");
+                // 编译路径用设计 id 命名特征；这里保持同一套约定，后续按 id 引用才找得到。
+                if (!string.IsNullOrEmpty(id) && !string.Equals(made.Name, id, StringComparison.Ordinal))
+                {
+                    try { made.Name = id; } catch (COMException) { }
+                }
+
+                double after = Geometry.TotalVolumeMm3(doc);
+                return Json.Dict(
+                    "kind", kind,
+                    "id", id,
+                    "feature", made.Name,
+                    "type", SafeString(delegate { return made.GetTypeName2(); }),
+                    "steps", new List<object>(sweeps.Steps.ToArray()),
+                    "volumeBeforeMm3", Json.R(before),
+                    "volumeAfterMm3", Json.R(after),
+                    "removedMm3", Json.R(before - after),
+                    "faces", SafeInt(delegate { return FaceCount(doc); }));
+            }
+        }
+
+        /// <summary>Resolves a feature the request named. A miss is FEATURE_NOT_FOUND
+        /// with the names that do exist, because "which sketch did you mean" is the
+        /// question a sweep failure should never have to ask.</summary>
+        static IFeature RequiredFeature(IModelDoc2 doc, string name, string what)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new BridgeError("BAD_ARGUMENT", what + " is required (a feature name)");
+            IFeature feature = SwHost.FindFeature(doc, name);
+            if (feature == null)
+            {
+                List<object> known = new List<object>();
+                foreach (IFeature f in SwHost.Features(doc))
+                    if (f != null) known.Add(f.Name);
+                throw new BridgeError("FEATURE_NOT_FOUND",
+                    what + " \"" + name + "\" is not in this document's feature tree",
+                    Json.Dict("what", what, "name", name, "features", known));
+            }
+            return feature;
+        }
+
+        static List<IFeature> NamedFeatures(IModelDoc2 doc, object raw, string what)
+        {
+            List<IFeature> list = new List<IFeature>();
+            if (raw == null) return list;
+            string single = raw as string;
+            if (single != null)
+            {
+                list.Add(RequiredFeature(doc, single, what));
+                return list;
+            }
+            foreach (object item in Json.Items(raw))
+            {
+                string name = item as string;
+                if (name != null) list.Add(RequiredFeature(doc, name, what));
+            }
+            return list;
+        }
+
+        static int FaceCount(IModelDoc2 doc)
+        {
+            IPartDoc part = doc as IPartDoc;
+            if (part == null) return 0;
+            object[] bodies = null;
+            try { bodies = (object[])part.GetBodies2((int)swBodyType_e.swSolidBody, false); }
+            catch (COMException) { }
+            if (bodies == null) return 0;
+            int faces = 0;
+            foreach (object raw in bodies)
+            {
+                IBody2 body = raw as IBody2;
+                if (body == null) continue;
+                object[] list = null;
+                try { list = (object[])body.GetFaces(); }
+                catch (COMException) { }
+                if (list != null) faces += list.Length;
+            }
+            return faces;
+        }
+
         Dictionary<string, object> PatternCircular(Dictionary<string, object> req)
         {
             using (SwHost h = SwHost.Attach())
@@ -2191,6 +2366,11 @@ namespace SwMcp
                 "instances", Rot.List(),
                 "activePid", activePid > 0 ? (object)activePid : null,
                 "expectedPid", SwHost.ExpectedPid > 0 ? (object)SwHost.ExpectedPid : null,
+                // 绑定状态是排障的第一读数：expectedPid=null 且 autoBind=false 时，
+                // 「这个 worker 没绑定」是设计结果而不是探测失败，读的人要能分辨。
+                "bindMode", SwHost.AutoBind ? (object)"auto" : (SwHost.ExpectedPid > 0 ? (object)"pid" : (object)"unbound"),
+                "attachedPid", SwHost.AttachedPid > 0 ? (object)SwHost.AttachedPid : null,
+                "attachedBy", SwHost.AttachedBy,
                 "attachFree", attachFree);
         }
 

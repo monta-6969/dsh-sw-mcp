@@ -1,6 +1,6 @@
 // 由 tools/gen-dispatch.mjs 生成，勿手改。
 // 来源：bridge/src/Operations.cs 的 SupportedOps / LockFree / DispatchUnlocked。
-export const DISPATCH_GENERATED_AT = "2026-11-23T09:49:09.188Z"
+export const DISPATCH_GENERATED_AT = "2026-11-26T06:59:55.682Z"
 export const DISPATCH_VERSION = 1
 export const DISPATCH = [
   {
@@ -287,6 +287,12 @@ export const DISPATCH = [
   },
   {
     "op": "dimensions",
+    "mutating": true,
+    "lockFree": false,
+    "dispatched": true
+  },
+  {
+    "op": "feature",
     "mutating": true,
     "lockFree": false,
     "dispatched": true

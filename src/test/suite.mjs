@@ -29,13 +29,13 @@ const plan = files.length ? files : [
   // plugin-fixes / envelope-shape 排在任何真机用例之前：它们只读源码与假桥接器，
   // 十秒内就能把「这一轮改的行为被回滚了」暴露出来，不必等真机跑起来才发现。
   'plugin-fixes.mjs', 'stage-runtime.mjs', 'compact-surface.mjs', 'model-invoke-batch.mjs', 'envelope-shape.mjs', 'verify-shape.mjs', 'observe-mcp.mjs',
-  'bindings.mjs', 'm3.mjs', 'acceptance-mcp.mjs', 'calculate.mjs', 'm5.mjs', 'm6.mjs', 'm7.mjs', 'kinds.mjs', 'curves.mjs', 'sketch-live.mjs', 'relations-live.mjs', 'gear.mjs', 'gear-native.mjs', 'pattern.mjs', 'objects.mjs',
+  'bindings.mjs', 'm3.mjs', 'acceptance-mcp.mjs', 'calculate.mjs', 'm5.mjs', 'm6.mjs', 'm7.mjs', 'kinds.mjs', 'curves.mjs', 'sweep-helix-loft.mjs', 'sketch-live.mjs', 'relations-live.mjs', 'sweep-helix-loft.mjs', 'gear.mjs', 'gear-native.mjs', 'pattern.mjs', 'objects.mjs',
   'drawing-schema.mjs', 'evidence-schema.mjs', 'noop-guard.mjs', 'unmeasured.mjs', 'cut-semantics.mjs', 'check-status.mjs', 'concurrency.mjs', 'bugfix-live.mjs', 'plugin-fixes-live.mjs',
   'compare.mjs', 'drawings.mjs', 'analysis.mjs', 'analysis-mesh.mjs', 'snapshot-live.mjs', 'broker-live.mjs', 'ui-live.mjs', 'diff-live.mjs', 'reclaim-live.mjs', 'native-dims.mjs', 'reopen-live.mjs', 'manual-edit-live.mjs', 'job-resume-live.mjs', 'parallel-live.mjs', 'parallel-overlap.mjs', 'assembly-parallel.mjs', 'multi-session.mjs', 'plugin-digest.mjs',
   'isolation-pid.mjs',
 ]
 // 不需要 SOLIDWORKS 的排在前面，这样"先跑快的"能尽早暴露语法与契约问题。
-const needsSolidworks = new Set(['objects.mjs', 'verify-shape.mjs', 'acceptance.mjs', 'observe-mcp.mjs', 'm3.mjs', 'acceptance-mcp.mjs', 'm5.mjs', 'm6.mjs', 'm7.mjs', 'kinds.mjs', 'curves.mjs', 'sketch-live.mjs', 'relations-live.mjs', 'gear.mjs', 'gear-native.mjs', 'pattern.mjs', 'noop-guard.mjs', 'unmeasured.mjs', 'compare.mjs', 'drawings.mjs', 'cut-semantics.mjs', 'check-status.mjs', 'concurrency.mjs', 'bugfix-live.mjs', 'plugin-fixes-live.mjs', 'deliver-gate.mjs', 'bindings.mjs', 'snapshot-live.mjs', 'broker-live.mjs', 'ui-live.mjs', 'diff-live.mjs', 'reclaim-live.mjs', 'native-dims.mjs', 'reopen-live.mjs', 'manual-edit-live.mjs', 'job-resume-live.mjs', 'parallel-live.mjs', 'parallel-overlap.mjs', 'assembly-parallel.mjs', 'multi-session.mjs'])
+const needsSolidworks = new Set(['objects.mjs', 'verify-shape.mjs', 'acceptance.mjs', 'observe-mcp.mjs', 'm3.mjs', 'acceptance-mcp.mjs', 'm5.mjs', 'm6.mjs', 'm7.mjs', 'kinds.mjs', 'curves.mjs', 'sweep-helix-loft.mjs', 'sketch-live.mjs', 'relations-live.mjs', 'gear.mjs', 'gear-native.mjs', 'pattern.mjs', 'noop-guard.mjs', 'unmeasured.mjs', 'compare.mjs', 'drawings.mjs', 'cut-semantics.mjs', 'check-status.mjs', 'concurrency.mjs', 'bugfix-live.mjs', 'plugin-fixes-live.mjs', 'deliver-gate.mjs', 'bindings.mjs', 'snapshot-live.mjs', 'broker-live.mjs', 'ui-live.mjs', 'diff-live.mjs', 'reclaim-live.mjs', 'native-dims.mjs', 'reopen-live.mjs', 'manual-edit-live.mjs', 'job-resume-live.mjs', 'parallel-live.mjs', 'parallel-overlap.mjs', 'assembly-parallel.mjs', 'multi-session.mjs'])
 
 function processCount() {
   try {

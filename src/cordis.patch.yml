@@ -32,7 +32,7 @@
       config:
         id: sw-native
         name: sw建模自动化
-        description: SOLIDWORKS 建模与绘图入口：一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；读图、规划、建模、验收、交付都走原生工具。
+        description: SOLIDWORKS 建模与绘图入口。
         order: 6
         plugins:
           - id: persona
@@ -65,9 +65,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: '<node.exe>'
+              command: 'C:\Program Files\nodejs\node.exe'
               args:
-                - '<repo>/server/server.mjs'
+                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
               # 默认走共享 broker：重操作提交给常驻实例 worker，首调用可自动拉起 SW。
               # 单元测试直接 spawn server.mjs，不经过这里，仍是直连路径。
               env:
@@ -131,7 +131,7 @@
       config:
         id: sw-assembly
         name: sw装配体自动化
-        description: SOLIDWORKS 装配体入口：零件先落盘再组装，配合逐条建、逐条核，驱动回读实际值；装配、核查、存盘交付都走原生工具。
+        description: SOLIDWORKS 装配体入口。
         order: 7
         plugins:
           - id: persona
@@ -172,9 +172,9 @@
             config:
               serverName: sw
               transport: stdio
-              command: '<node.exe>'
+              command: 'C:\Program Files\nodejs\node.exe'
               args:
-                - '<repo>/server/server.mjs'
+                - 'C:\Users\mota\Desktop\工程自动化\插件\dsh-sw建模自动化\src\server\server.mjs'
               env:
                 SW_MCP_BROKER: '1'
                 SW_MCP_BROKER_ENSURE: '1'

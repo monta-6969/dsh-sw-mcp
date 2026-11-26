@@ -66,8 +66,16 @@ namespace SwMcp
             return found;
         }
 
-        public static List<object> List()
+        /// <summary>ROT 里现有实例的 pid，按枚举顺序。`--instance auto` 用它先数
+        /// 再绑：唯一才绑，多于一个就由调用方点名。</summary>
+        public static List<int> Pids()
         {
+            List<int> result = new List<int>();
+            foreach (Entry entry in Enumerate()) result.Add(entry.Pid);
+            return result;
+        }
+
+        public static List<object> List()        {
             List<object> result = new List<object>();
             foreach (Entry entry in Enumerate())
             {

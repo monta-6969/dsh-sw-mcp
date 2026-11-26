@@ -1894,6 +1894,51 @@ function registerGroupTool(sourceName, group, definition, handler) {
   return handle
 }
 
+/**
+ * 本会话此刻真正能调的 action，按工具分组。
+ *
+ * 为什么要有：工具的 action 是按组注册的（见 tool-face TOOL_SPLITS），没激活的组
+ * 连 action 都不在 schema 里。建模会话实测因此以为「inspect 只有 model/faces/bodies/
+ * sketch/figure/measure，六档验收不存在」—— 而 verify 就在 qa 组里，只是没开。
+ * 与其让人去猜一个不存在的 action，不如把「现在有什么、打开哪个能力就有什么」写进
+ * focus 的返回值。
+ */
+function toolFaceReport(activeCapabilities = []) {
+  const active = new Set(activeCapabilities)
+  const tools = {}
+  for (const [sourceName, groups] of Object.entries(TOOL_SPLITS)) {
+    const live = []
+    const locked = []
+    for (const group of groups) {
+      // core 组启动即注册；其余组要么已激活，要么还锁着。
+      const unlocked = group.core === true || active.has(group.name)
+      for (const action of group.actions) {
+        if (unlocked) live.push(group.name === sourceName ? action : `${group.name}.${action}`)
+        else locked.push({ action, capability: group.name, group: group.name })
+      }
+    }
+    if (live.length || locked.length) tools[sourceName] = { actions: live, locked }
+  }
+  return {
+    tools,
+    summary: 'actions 是本会话现在可调的；locked 里每条都写了「激活哪个 capability 才有」',
+  }
+}
+
+/** focus 的下一句：把还锁着、且调用方最可能需要的动作指出来。 */
+function inactiveFaceHint(activeCapabilities = []) {
+  const active = new Set(activeCapabilities)
+  const hints = []
+  if (!active.has('qa')) {
+    hints.push('inspect action="verify" / evidence / review / snapshot 属于按需组 qa：'
+      + 'catalog action="activate" capability="qa"（或 catalog action="focus" mode="modify"）之后才在 schema 里')
+  }
+  if (!active.has('assembly')) hints.push('assembly/assembly_inspect 属于按需组：catalog action="activate" capability="assembly"')
+  if (!active.has('advanced_api')) hints.push('advanced_api（invoke/object/kinds/batch）属于按需组：catalog action="activate" capability="advanced_api"')
+  if (!active.has('workspace_ops')) hints.push('workspace_ops（status/instances/cleanup/reap）属于按需组：catalog action="activate" capability="workspace_ops"')
+  return hints.length ? hints.join('；') : null
+}
+
 /** catalog.activate 的实现：真的把工具注册进 McpServer（重复激活返回 already-active）。 */
 function activateCapability(capability) {
   const name = typeof capability === 'string' ? capability.trim() : ''
@@ -2765,10 +2810,16 @@ server.registerTool(
                 rules: spec.rules,
                 plan: FOCUS_PLAN[mode].path,
                 budget: FOCUS_PLAN[mode].budget,
+                // 每个工具的 action 是按组注册的：没激活的组连 action 都不在 schema 里，
+                // 于是建模会话会以为「inspect 只有 6 个动作、没有 verify」。把本会话
+                // 现在真正可调的动作与「激活哪个能力才有」一起写清楚，比让调用方去猜
+                // 一个不存在的 action 便宜得多。
+                toolFace: toolFaceReport([...activatedCapabilities]),
               },
               nextActions: [
                 `需要细节时按需读：${spec.skills.join('、')}`,
-              ],
+                inactiveFaceHint([...activatedCapabilities]),
+              ].filter(Boolean),
             }),
           )
         }
@@ -2781,6 +2832,7 @@ server.registerTool(
                 active: [...activatedCapabilities],
                 core: coreToolNames(),
                 onDemand: onDemandCapabilities(),
+                toolFace: toolFaceReport([...activatedCapabilities]),
               },
               nextActions: activatedCapabilities.size === 0
                 ? ['需要装配/工程图/验收/运维/分析时：catalog action="activate" capability="<工具名>"']
@@ -3058,7 +3110,7 @@ server.registerTool(
     title: '操作模型',
     description: DESCRIPTIONS.model,
     inputSchema: z.object({
-      action: z.enum(['create', 'build', 'edit', 'invoke', 'object', 'batch', 'pattern', 'diff', 'kinds', 'rebuild', 'undo', 'assemble', 'mate', 'mateDelete', 'mateLock', 'componentLock', 'componentRotate', 'componentTranslate', 'drawing', 'plan']).default('invoke').describe('要做什么'),
+      action: z.enum(['create', 'build', 'edit', 'invoke', 'object', 'batch', 'pattern', 'diff', 'kinds', 'rebuild', 'undo', 'assemble', 'mate', 'mateDelete', 'mateLock', 'componentLock', 'componentRotate', 'componentTranslate', 'drawing', 'plan', 'feature', 'helix', 'sweep', 'loft']).default('invoke').describe('要做什么'),
       definition: z.any().optional().describe('build/plan 用的设计定义（schemaVersion 3）。传对象；也接受以 { 开头的 JSON 字符串（服务会先 JSON.parse，解析失败才按原样报错）'),
       output: z.enum(['part', 'sketch']).default('part').describe('build 的产出：part=实体零件（默认）；sketch=只建草图，不拉伸、不用体积判成败'),
       precision: z.enum(['relations', 'coordinate']).default('relations').describe('草图精度：relations（默认，必须有几何关系）或 coordinate（只画坐标草稿，永远 ready:false）'),
@@ -3100,6 +3152,46 @@ server.registerTool(
       axisPlanes: z.array(z.number().int().min(0)).max(2).optional()
         .describe('pattern：用这两个基准面（序号）的交线作轴；默认 [1,2]'),
       flip: z.boolean().optional().describe('pattern：反向'),
+      // ---- helix / sweep / loft（单特征动作，作用在已打开的 designId 文档上） ----
+      featureKind: z.enum(['helix', 'sweep', 'sweptCut', 'loft', 'loftedCut']).optional()
+        .describe('feature 动作要建哪种特征；helix/sweep/loft 动作省略时由动作名决定'),
+      profile: z.string().optional().describe('轮廓草图特征名（sweep=轮廓；helix=底圆草图；loft=单截面兜底）'),
+      path: z.string().optional().describe('扫掠路径特征名（螺旋线或草图）'),
+      guides: z.array(z.string()).optional().describe('引导线特征名列表'),
+      sections: z.array(z.string()).optional().describe('放样截面特征名，按顺序给（最少 2 个）'),
+      definedBy: z.enum(['heightAndPitch', 'pitchAndRevolution', 'heightAndRevolution', 'spiral']).optional()
+        .describe('螺旋线定义方式，默认 heightAndPitch（蜗杆用这个：height + pitch）'),
+      height: z.number().optional().describe('螺旋线高度 mm（definedBy 含 height 时生效）'),
+      pitch: z.number().optional().describe('螺旋线螺距 mm（单头时等于导程；Ø14 m1 蜗杆 = π·m = 3.141592）'),
+      revolutions: z.number().optional().describe('螺旋线圈数（definedBy 含 revolution 时生效）'),
+      reversed: z.boolean().optional().describe('螺旋线反向（改变沿轴的推进方向）'),
+      clockwise: z.boolean().optional().describe('螺旋线旋向；右旋螺纹与 +Z 推进组合决定手性，量完 measure kind="helix" 的 hand 再定'),
+      tapered: z.boolean().optional().describe('螺旋线是否带锥度；spiral 定义不许锥度（会报 INVALID_ARGUMENT）'),
+      outward: z.boolean().optional().describe('螺旋线向外'),
+      taperAngle: z.number().optional().describe('锥度角，度'),
+      startAngle: z.number().optional().describe('起始角，度'),
+      cut: z.boolean().optional().describe('sweep/loft 是否切除（sweptCut/loftedCut 动作恒为切除）'),
+      thin: z.boolean().optional().describe('薄壁扫掠/放样'),
+      thickness: z.number().optional().describe('薄壁厚度 mm（thin=true 时必填）'),
+      thickness2: z.number().optional().describe('薄壁第二方向厚度 mm（thinType="twoDirection" 时必填）'),
+      thinType: z.enum(['oneDirection', 'oppDirection', 'midPlane', 'twoDirection']).optional()
+        .describe('薄壁方向，默认 oneDirection'),
+      twist: z.number().optional().describe('扭转角，度（twistControl 为 constantTwist/normalConstantTwist 时生效）'),
+      twistControl: z.enum(['followPath', 'keepNormalConstant', 'followPathFirstGuideCurve', 'followFirstSecondGuideCurves', 'constantTwist', 'normalConstantTwist'])
+        .optional().describe('扫掠扭转控制，默认 followPath'),
+      startMatch: z.enum(['none', 'coincident', 'tangent']).optional().describe('扫掠/放样起点约束，默认 none'),
+      endMatch: z.enum(['none', 'coincident', 'tangent']).optional().describe('扫掠/放样终点约束，默认 none'),
+      propagate: z.boolean().optional().describe('扫掠：与相邻面合并（默认 true）'),
+      alignment: z.boolean().optional().describe('扫掠：与路径对齐（默认 true）'),
+      advancedSmoothing: z.boolean().optional().describe('高级光顺，默认 true'),
+      merge: z.boolean().optional().describe('与已有实体合并，默认 true'),
+      circularProfile: z.boolean().optional().describe('扫掠用圆截面（轮廓草图可省，半径按 circularDiameter/2）'),
+      circularDiameter: z.number().optional().describe('圆截面直径 mm（circularProfile=true 时必填）'),
+      reverseDirection: z.boolean().optional().describe('扫掠反向'),
+      mode: z.enum(['boss', 'cut', 'surface']).optional().describe('放样模式，默认 boss'),
+      closed: z.boolean().optional().describe('放样是否闭合（首尾相接）'),
+      keepTangency: z.boolean().optional().describe('放样保持相切'),
+      tessTolerance: z.number().optional().describe('放样曲面公差，默认 1'),
       comparePath: z.string().optional().describe('diff：基准 STEP 的绝对路径（预期）；当前文档会先导出 STEP 再与它比较'),
       volumeToleranceMm3: z.number().min(0).optional().describe('diff：体积容差，默认 max(1, |V|*1e-4)'),
       lengthToleranceMm: z.number().min(0).optional().describe('diff：包围盒容差，单位 mm，默认 0.01'),
@@ -3857,6 +3949,62 @@ server.registerTool(
                 ? [`还有更多：同一 target 传 offset=${result.nextOffset} 继续看`]
                 : [],
               extra: { preview },
+            }),
+          )
+        }
+        case 'feature':
+        case 'helix':
+        case 'sweep':
+        case 'loft': {
+          // 单特征动作：作用在 designId 已打开的那份文档上，轮廓/路径都按特征名引用。
+          // 与 build 里的同名 feature kind 共用桥接器的同一段代码；区别只是这里不重建整件。
+          const designId = resolveDesignId(args.designId)
+          if (!designId) {
+            return failed({
+              op: `model.${args.action}`,
+              error: fail('DESIGN_ID_REQUIRED',
+                `${args.action} 需要 designId：它作用在一份已存在的文档上，不猜「前台那份」`),
+            })
+          }
+          const kind = args.action === 'helix'
+            ? 'helix'
+            : args.action === 'sweep'
+              ? (args.cut ? 'sweptCut' : 'sweep')
+              : args.action === 'loft'
+                ? (args.cut ? 'loftedCut' : 'loft')
+                : args.featureKind
+          if (!kind) {
+            return failed({
+              op: `model.${args.action}`,
+              error: fail('BAD_ARGUMENT', 'feature 需要 featureKind（helix | sweep | sweptCut | loft | loftedCut）'),
+            })
+          }
+          const SPEC_KEYS = [
+            'profile', 'path', 'guides', 'sections', 'definedBy', 'height', 'pitch', 'revolutions',
+            'reversed', 'clockwise', 'tapered', 'outward', 'taperAngle', 'startAngle', 'cut', 'thin',
+            'thickness', 'thickness2', 'thinType', 'twist', 'twistControl', 'startMatch', 'endMatch',
+            'propagate', 'alignment', 'advancedSmoothing', 'merge', 'circularProfile',
+            'circularDiameter', 'reverseDirection', 'mode', 'closed', 'keepTangency', 'tessTolerance',
+          ]
+          const spec = { kind }
+          for (const key of SPEC_KEYS) if (args[key] !== undefined) spec[key] = args[key]
+          const result = await callBridge('feature', { designId, feature: spec })
+          const delta = Number(result?.removedMm3 ?? 0)
+          return ok(
+            envelope({
+              summary: `${kind} 已建：${result?.feature ?? '?'}`
+                + (kind === 'helix' ? '' : `；体积 ${result?.volumeBeforeMm3} → ${result?.volumeAfterMm3} mm³`
+                  + (Math.abs(delta) > 1e-9 ? `（切除 ${delta.toFixed(3)}）` : '（未切除材料）'))
+                + `；面数 ${result?.faces ?? '?'}`,
+              designId,
+              status: 'ok',
+              measurements: { volumeBeforeMm3: result?.volumeBeforeMm3, volumeAfterMm3: result?.volumeAfterMm3, removedMm3: result?.removedMm3, faces: result?.faces },
+              changes: result,
+              timings: { totalMs: Date.now() - started },
+              nextActions: kind === 'helix'
+                ? ['接着建轮廓草图，再 model action="sweep" cut=true（profile=轮廓, path=这条螺旋线）',
+                  '量导程用 inspect action="measure" measure={kind:"helix"}']
+                : ['量读数：inspect action="model" format="geometry"；导程用 measure kind="helix"'],
             }),
           )
         }

@@ -254,6 +254,80 @@
 **退出判据**：视图齐全或 `missed` 有解释；投影法正确；PDF 可开；标注/标题栏状态写清。
 
 **失败转哪**：视图放不上→换视图名/模板；投影错→改 `projection`；标注不支持→04 §13；PDF 空白→查视图/打印范围。
+
+---
+
+## N11 螺旋面：helix → sweep（蜗杆/螺纹/螺旋槽）
+
+齿轮啮合必须按现实做：蜗杆要真螺旋面（ZA 阿基米德蜗杆：轴向齿廓是直线），不能用
+「回转芯 + 偏心圆盘错位拉伸」近似 —— 那种件在装配里穿模（实测 9 mm）。
+
+### 三种建模入口，选一个，不要混着猜
+
+| 入口 | 什么时候用 | 形状 |
+|---|---|---|
+| `model action="build"` 里写 `{kind:"helix"}` / `{kind:"sweep"}` | 一次声明整件（推荐） | 设计定义 |
+| `model action="helix"` / `action="sweep"` | 文档已经在、草图已经建好，只想补一个特征 | 按特征名引用 |
+| `advanced_api action="invoke"` | 前两条都不够时 | 直接调 API |
+
+`build` 里的顺序是硬约束：**底圆草图 → helix → 轮廓草图 → sweep**。路径/轮廓/locator
+都按 `features[].id` 引用；引用不存在报 `CURVE_NOT_FOUND`（不会静默跳过）。未知
+`kind` 现在报 `UNSUPPORTED_FEATURE_KIND` —— 以前是无声跳过，整件照建、回包 `ok`，
+少掉的那一步只体现在体积上。
+
+### 配方：Ø14、m1、z1=1 ZA 单头蜗杆（螺纹长 30）
+
+参数（GEARLAB `10-数据/齿轮/20-蜗杆蜗轮-几何与点表.md`）：
+`m=1, z1=1, d1=14, γ=4.0856°, p_x=πm=3.141592, α_x=20.0469°, da=16, df=11.6,
+分度轴向齿厚 1.5708, 齿顶 0.840, 齿根 2.446`。
+
+```
+1) 毛坯：平面0(前视) 圆 Ø16 → extrude 30（direction "+Z"）
+2) 螺旋线底圆：平面0 圆 Ø14
+3) helix：profile=hxbase, definedBy="heightAndPitch", height=30, pitch=3.141592
+4) 轴向齿槽轮廓：平面1(上视，含轴)，四点梯形（x=径向, y=轴向）：
+     半宽(r) = p_x/4 − (r−7)·tan(α_x)
+     (5.8, +0.3475) → (5.8, −0.3475) → (8.4, −1.2963) → (8.4, +1.2963) → 闭合
+     r=5.8 是齿根、r=8.4 越过齿顶，保证切穿
+5) sweep：profile=groove, path=hx, cut=true（走 InsertCutSwept5）
+```
+
+**验收读数**（`inspect action="measure" measure={kind:"helix"}` 是从几何量的，不是读回输入）：
+
+| 项 | 期望 | 本机实测 |
+|---|---|---|
+| 体积 | 4400–4800 mm³ | 4594.4709 |
+| 面数 | 8（3 个圆柱面 + 螺旋槽） | 8 |
+| 齿顶 / 齿根 Ø | 16.000 / 11.600 | 8.0 / 5.8（半径） |
+| 导程 | π·m = 3.141593 ±0.005 | 3.141592 |
+| 齿顶轴向齿厚 | 0.840 ±0.02 | 0.841 |
+
+### 坑（都实测过）
+
+- **轮廓必须与路径起点相交**：轮廓画在「过轴的轴向平面」里，并且梯形要盖住螺旋线起点
+  `(7, 0, 0)`。轮廓整块在路径旁边 → `InsertCutSwept5` 返回 null → `SWEEP_FAILED`。
+- **齿槽要错开半个齿距还是对齐**：把齿槽中心正对螺旋线起点（本例 y=0）最省事；螺纹
+  相位在装配时再转，单件验收不看相位。
+- **旋向**：`clockwise` 与 `reversed` 组合决定手性；建完先看 `measure kind="helix"` 的
+  `hand`，要「右旋 + 沿 +Z 推进」就照上表默认值，不要凭直觉翻。
+- **`draft` 现在真生效**（`Dchk1/Dchk2` 由 `draft≠0` 打开），但那是拉伸的拔模，不能
+  代替倒角；`bevel` 在 gear 上不再被静默忽略。
+- **扫掠切除必须验证体积下降**：桥接器自己会算，`SWEEP_NO_MATERIAL_REMOVED` 说明路径
+  在体外或轮廓没碰到材料 —— 不要拿「特征树里有 SweepCut」当成功。
+- 蜗轮是**喉式、且必须由这只蜗杆自身展成**（等于滚齿），不能用直齿近似；本工具面还没
+  有「实体当刀具做多刀位布尔减」的动作，先用 `assembly` + `Combine` 手工路线，交付里
+  标 `tool_gap`。
+
+## N12 放样（真齿面/过渡体）
+
+`model action="loft"`：`sections` 给两个以上截面特征名（顺序=放样顺序），
+`mode="boss"|"cut"|"surface"` 分别走 `InsertProtrusionBlend2` / `InsertCutBlend` /
+`InsertLoftRefSurface2`。少于两段一律 `BAD_ARGUMENT`（一段那是拉伸）。
+
+直齿锥齿轮的正确做法是「背锥展开渐开线 → 大端/小端两截面放样」，**展开时要带 1/cosδ
+因子**：漏掉它齿顶齿厚会差 0.5 mm（1.54 vs 2.07），3D 压力角退化成 14.43°。样件必须
+与 `12-锥齿-对照基准点.csv` 的 36 点比对，分度圆齿厚必须完全一致。
+
 ## 当前能力缺口速查
 
 | 能力 | 状态 | 本文件采用的走法 |
@@ -261,6 +335,8 @@
 | `datum` 真几何 | missing | `placement:"origin"` + 自己换算；标 `datum_fallback` |
 | `componentRotate frame="local"` | missing | 只用 global/显式旋转点；标 `frame_fallback` |
 | 装配 DOF/干涉读数 | degraded/missing | `assembly_inspect` + `measure`；标 `unmeasured` |
+| `helix` / `sweep` / `loft` | **available** | `build` 的定义里或 `model action="helix"|"sweep"|"loft"`；配方见 N11/N12 |
+| 螺旋导程读数 | **available** | `inspect action="measure" measure={kind:"helix"}`（沿螺旋边采样回归，不读输入参数） |
 | `chamfer` | missing | 保留尖边或切除等效；标 `tool_gap` |
 | `shell` | missing | 外轮廓拉伸 + 内腔切除 |
 | `fillet` | degraded | 只用支持的边型；不支持就保留尖边 |

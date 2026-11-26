@@ -34,11 +34,12 @@ namespace SwMcp
                 case "spacing": return Spacing(req);
                 case "distance": return Distance(req);
                 case "planes": return PlaneList(req);
+                case "helix": return Helix(req);
                 default:
                     throw new BridgeError("BAD_ARGUMENT",
                         "measure kind \"" + kind + "\" is not supported",
                         Json.Dict("kinds", Json.List("faces", "cylinders", "holes", "axis",
-                            "spacing", "distance", "planes")));
+                            "spacing", "distance", "planes", "helix")));
             }
         }
 
@@ -689,6 +690,292 @@ namespace SwMcp
             public double[] Point = new double[3];
             public int Axis = -1;     // 0/1/2 when the anchor is a coordinate plane
             public string Name;
+        }
+
+        // ---------------------------------------------------------------- helix
+        //
+        // 真螺旋面做出来之后，「它到底是不是 3.1416 的导程」不能靠读回输入参数回答：
+        // 扫掠失败也可能留下一个看起来像螺纹的东西。这里直接量几何 —— 取实体上
+        // 半径恒定、绕轴单调转动的边（螺旋边），沿边采样后用 z = z0 + (p/2π)·θ 回归，
+        // 斜率就是导程。同一个半径上两条螺旋边的轴向错位就是那条棱带的齿厚。
+        //
+        // 只用 IEdge.Evaluate：它给出曲线上的精确点，不经过网格化，因此读数与
+        // 建模公差同级，而不是与显示精度同级。
+
+        sealed class HelixEdge
+        {
+            public double Radius;
+            public double Pitch;
+            public double Turns;
+            public double Z0;
+            public string Id;
+        }
+
+        static Dictionary<string, object> Helix(Dictionary<string, object> req)
+        {
+            int samples = Json.Int(req, "samples", 400);
+            if (samples < 50) samples = 50;
+            if (samples > 4000) samples = 4000;
+            double minTurns = Json.Dbl(req, "minTurns", 1.5);
+            double radiusTolerance = Json.Dbl(req, "radiusTolerance", 0.02);
+            bool debug = Json.Bool(req, "debug", false);
+            List<object> trace = new List<object>();
+
+            using (SwHost h = SwHost.Attach())
+            {
+                bool fallback;
+                IModelDoc2 doc = Operations.OptionalDesignDocument(h, req, "measure.helix", out fallback);
+                RequirePart(doc, "helix");
+                IPartDoc part = doc as IPartDoc;
+                object[] bodies = part == null ? null
+                    : part.GetBodies2((int)swBodyType_e.swSolidBody, false) as object[];
+                if (bodies == null || bodies.Length == 0)
+                    throw new BridgeError("EMPTY_MODEL", "this part has no solid body to measure");
+
+                List<HelixEdge> helicals = new List<HelixEdge>();                double edgeMinR = double.MaxValue, edgeMaxR = 0;
+                List<object> rejected = new List<object>();
+                int edgeCount = 0;
+                foreach (object raw in bodies)
+                {
+                    IBody2 body = raw as IBody2;
+                    if (body == null) continue;
+                    object[] edges = null;
+                    try { edges = (object[])body.GetEdges(); }
+                    catch (COMException) { }
+                    if (edges == null) continue;
+                    foreach (object e in edges)
+                    {
+                        IEdge edge = e as IEdge;
+                        if (edge == null) continue;
+                        edgeCount++;                        SampleRadiusRange(edge, ref edgeMinR, ref edgeMaxR);
+                        string why;
+                        HelixEdge found = FitHelix(edge, samples, radiusTolerance, out why);
+                        if (found != null && found.Turns >= minTurns) helicals.Add(found);
+                        else if (debug)
+                        {
+                            trace.Add(Json.Dict("edge", edgeCount,
+                                "turns", found == null ? null : (object)Json.R(found.Turns),
+                                "radius", found == null ? null : (object)Json.R(found.Radius),
+                                "why", why));
+                        }
+                    }
+                }
+
+                if (debug)
+                    return Operations.MarkDocumentFallback(
+                        Json.Dict("kind", "helixDebug", "edgeCount", edgeCount,
+                            "helixCount", helicals.Count, "trace", trace, "document", DocInfo(doc)),
+                        doc, fallback);
+
+                if (helicals.Count == 0)
+                    throw new BridgeError("NO_HELICAL_EDGE",
+                        "no edge on this body is a helix (constant radius, monotonically turning) — "
+                        + "there is nothing to measure a lead on. Build the thread as a swept cut along "
+                        + "a helix first; a polar pattern of tilted cuts has no helical edge.",
+                        Json.Dict("edges", edgeCount));
+
+                // 导程取所有螺旋边的中位数：一条边上偶尔会有退化的采样点，中位数不受它影响。
+                List<double> pitches = new List<double>();
+                foreach (HelixEdge he in helicals) pitches.Add(Math.Abs(he.Pitch));
+                pitches.Sort();
+                double pitch = pitches[pitches.Count / 2];
+
+                // 半径 → 齿顶 / 齿根：螺旋边的半径就是它所在圆柱的半径。
+                double minR = double.MaxValue, maxR = 0;
+                foreach (HelixEdge he in helicals)
+                {
+                    if (he.Radius < minR) minR = he.Radius;
+                    if (he.Radius > maxR) maxR = he.Radius;
+                }
+
+                // 同一半径上的边：轴向错位 = 棱带宽度。对螺纹来说齿顶那条棱带就是齿顶齿厚。
+                List<object> bands = new List<object>();
+                for (int i = 0; i < helicals.Count; i++)
+                {
+                    for (int j = i + 1; j < helicals.Count; j++)
+                    {
+                        if (Math.Abs(helicals[i].Radius - helicals[j].Radius) > radiusTolerance) continue;
+                        // 两条边在 θ=0 处的轴向截距差 = 它们之间那条棱带的宽度（对齿顶
+                        // 圆柱面来说就是齿顶轴向齿厚）。**不做 ±p/2 折叠**：折叠会把
+                        // 2.30 的槽宽折成 0.84 的齿厚，读数看起来「对上了」，实际量的
+                        // 是另一半 —— 上一轮就是这样把齿/槽读反的。
+                        double rawOffset = Math.Abs(helicals[i].Z0 - helicals[j].Z0) % pitch;
+                        double ribbon = Math.Min(rawOffset, pitch - rawOffset);
+                        bands.Add(Json.Dict(
+                            "from", helicals[i].Id, "to", helicals[j].Id,
+                            "radius", Json.R(helicals[i].Radius),
+                            "axialOffsetMm", Json.R(rawOffset),
+                            "ribbonWidthMm", Json.R(ribbon)));
+                    }
+                }
+
+                List<object> rows = new List<object>();
+                foreach (HelixEdge he in helicals)
+                    rows.Add(Json.Dict("id", he.Id, "radius", Json.R(he.Radius),
+                        "pitchMm", Json.R(Math.Abs(he.Pitch)), "turns", Json.R(he.Turns),
+                        "hand", he.Pitch >= 0 ? "right" : "left"));
+
+                double maxTurns = 0;
+                foreach (HelixEdge he in helicals) if (he.Turns > maxTurns) maxTurns = he.Turns;
+                return Operations.MarkDocumentFallback(Json.Dict(
+                    "kind", "helix",
+                    "pitchMm", Json.R(pitch),
+                    "leadMm", Json.R(pitch),
+                    "turns", Json.R(maxTurns),
+                    "fivePitchMm", Json.R(pitch * 5.0),
+                    "helixCount", helicals.Count,
+                    "edgeCount", edgeCount,
+                    "minRadiusMm", Json.R(edgeMinR == double.MaxValue ? minR : edgeMinR),                    "maxEdgeRadiusMm", Json.R(edgeMaxR),
+                    "maxRadiusMm", Json.R(maxR),
+                    "helicalEdges", rows,
+                    "bands", bands,
+                    "document", DocInfo(doc)), doc, fallback);
+            }
+        }
+
+        /// <summary>Samples one edge and decides whether it is a helix.
+        ///
+        /// A helix is: constant radius (r spread under <paramref name="radiusTolerance"/>),
+        /// turning monotonically about the Z axis, with z linear in the unwrapped angle.
+        /// The R² of that fit is the honesty check — a B-spline approximation of a thread
+        /// still fits to ~1e-6, while a random edge does not fit at all.</summary>
+            /// <summary>一条边上采样点的半径范围（mm）。用来回答「这条槽到底切到多深」：
+            /// 螺旋槽的底面可能是螺旋面而不是圆柱面，此时没有圆柱面可以读半径，
+            /// 但它的边界边一定经过齿根 —— 取所有边的最小半径就是实际齿根。</summary>
+            static void SampleRadiusRange(IEdge edge, ref double min, ref double max)
+            {
+                try
+                {
+                    ICurve curve = edge.GetCurve() as ICurve;
+                    if (curve == null) return;
+                    double t0, t1;
+                    bool closed, periodic;
+                    if (!curve.GetEndParams(out t0, out t1, out closed, out periodic)) return;
+                    if (!(t1 > t0)) return;
+                    const int steps = 120;
+                    for (int i = 0; i <= steps; i++)
+                    {
+                        double[] p = curve.Evaluate(t0 + (t1 - t0) * i / steps) as double[];
+                        if (p == null || p.Length < 2) continue;
+                        double r = Math.Sqrt(p[0] * p[0] + p[1] * p[1]) * 1000.0;
+                        if (r < min) min = r;
+                        if (r > max) max = r;
+                    }
+                }
+                catch (COMException) { }
+            }
+
+            static HelixEdge FitHelix(IEdge edge, int samples, double radiusTolerance, out string why)    {
+        why = null;
+        double t0, t1;
+        if (!EdgeParamRange(edge, out t0, out t1)) { why = "no param range"; return null; }
+        if (!(t1 > t0)) { why = "empty range " + t0 + ".." + t1; return null; }
+
+
+            ICurve curve = null;
+            try { curve = edge.GetCurve() as ICurve; }
+            catch (COMException) { }
+            if (curve == null) { why = "no curve"; return null; }
+            bool closed, periodic;
+            if (!curve.GetEndParams(out t0, out t1, out closed, out periodic)) { why = "no end params"; return null; }
+            if (!(t1 > t0)) { why = "empty curve range " + t0 + ".." + t1; return null; }
+
+            List<double> xs = new List<double>();
+            List<double> ys = new List<double>();
+            List<double> zs = new List<double>();
+            for (int i = 0; i <= samples; i++)
+            {
+                double t = t0 + (t1 - t0) * i / samples;
+                double[] p;
+                try { p = (double[])curve.Evaluate(t); }
+                catch (COMException) { continue; }
+                catch (InvalidCastException) { continue; }
+                if (p == null || p.Length < 3) continue;
+                xs.Add(p[0]); ys.Add(p[1]); zs.Add(p[2]);
+            }
+            if (xs.Count < 10) { why = "samples " + xs.Count; return null; }
+
+            double rMin = double.MaxValue, rMax = 0;
+            for (int i = 0; i < xs.Count; i++)
+            {
+                double r = Math.Sqrt(xs[i] * xs[i] + ys[i] * ys[i]);
+                if (r < rMin) rMin = r;
+                if (r > rMax) rMax = r;
+            }
+            if (rMax - rMin > radiusTolerance / 1000.0) { why = "radius " + (rMin * 1000).ToString("F4") + ".." + (rMax * 1000).ToString("F4"); return null; }   // 不是恒定半径 → 不是螺旋边
+            double radius = (rMin + rMax) / 2.0;
+            if (radius < 1e-7) { why = "zero radius"; return null; }
+
+            // 展开角度：逐点取相邻增量并折到 (-π, π]，累加得到单调的 θ。
+            double theta = Math.Atan2(ys[0], xs[0]);
+            List<double> thetas = new List<double>();
+            List<double> zList = new List<double>();
+            thetas.Add(theta);
+            zList.Add(zs[0]);
+            for (int i = 1; i < xs.Count; i++)
+            {
+                double a = Math.Atan2(ys[i], xs[i]);
+                double d = a - theta;
+                while (d > Math.PI) d -= 2 * Math.PI;
+                while (d < -Math.PI) d += 2 * Math.PI;
+                theta += d;
+                thetas.Add(theta);
+                zList.Add(zs[i]);
+            }
+            double turns = Math.Abs(theta - thetas[0]) / (2 * Math.PI);
+            if (turns < 0.5) { why = "turns " + turns.ToString("F3") + " r=" + radius.ToString("F3"); return null; }
+
+            // z = z0 + slope·θ 的最小二乘拟合。
+            double n = thetas.Count;
+            double sumT = 0, sumZ = 0, sumTT = 0, sumTZ = 0;
+            for (int i = 0; i < thetas.Count; i++)
+            {
+                sumT += thetas[i]; sumZ += zList[i];
+                sumTT += thetas[i] * thetas[i]; sumTZ += thetas[i] * zList[i];
+            }
+            double denom = n * sumTT - sumT * sumT;
+            if (Math.Abs(denom) < 1e-12) return null;
+            double slope = (n * sumTZ - sumT * sumZ) / denom;
+            double z0 = (sumZ - slope * sumT) / n;
+            double pitch = slope * 2 * Math.PI * 1000.0;      // 每转进给 = 导程（单头），m→mm
+            if (Math.Abs(pitch) < 1e-6) { why = "zero pitch"; return null; }
+
+            HelixEdge result = new HelixEdge();
+            result.Radius = radius * 1000.0;
+            result.Pitch = pitch;
+            result.Turns = turns;
+            result.Z0 = z0 * 1000.0;
+            result.Id = SafeEdgeId(edge);
+            return result;
+        }
+
+        static bool EdgeParamRange(IEdge edge, out double t0, out double t1)
+        {
+            t0 = 0; t1 = 0;
+            // GetCurveParams2 → [startParam, endParam, startX, startY, startZ, endX, endY, endZ]
+            object raw = null;
+            try { raw = edge.GetCurveParams2(); }
+            catch (COMException) { }
+            double[] values = raw as double[];
+            if (values == null || values.Length < 2) return false;
+            t0 = values[0];
+            t1 = values[1];
+            return !double.IsNaN(t0) && !double.IsNaN(t1);
+        }
+
+        static string SafeEdgeId(IEdge edge)
+        {
+            // 只要一个可读的标签，不把持久引用当身份用：调用方拿到的是几何读数，
+            // 边 id 只用于把「哪两条边构成那条棱带」说清楚。
+            try
+            {
+                object raw = edge.GetCurveParams2();
+                double[] values = raw as double[];
+                if (values == null || values.Length < 5) return null;
+                return "t=" + Json.R(Math.Round(values[0], 6)) + "@r=" + Json.R(Math.Round(Math.Sqrt(
+                    values[2] * values[2] + values[3] * values[3]), 4));
+            }
+            catch (COMException) { return null; }
         }
 
         static Dictionary<string, object> Distance(Dictionary<string, object> req)

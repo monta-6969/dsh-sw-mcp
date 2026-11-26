@@ -34,6 +34,18 @@ namespace SwMcp
         /// cannot silently receive the work meant for the first one.</summary>
         public static int ExpectedPid;
 
+        /// <summary>`--instance auto`：ROT 里恰好只有一个实例时才绑定它。
+        ///
+        /// 为什么需要：直连 worker 的 pid 来自「本会话在 broker 登记表里的绑定」，
+        /// 而登记表要等第一次 broker 作业之后才有这条记录。于是一个刚起的会话
+        /// 拿着 ExpectedPid=0 进来，fail-closed 把它判成 INSTANCE_NOT_BOUND ——
+        /// 哪怕这台机器上只有唯一一个 SOLIDWORKS，身份根本没有歧义。
+        ///
+        /// 这不是把「跟随前台」后门重新打开：绑定的对象来自 ROT 的 moniker，仍然
+        /// 用 GetProcessID() 复核，attachedBy 记成 "rot-unique" 并写审计行；
+        /// 两个及以上实例一律 INSTANCE_AMBIGUOUS 并列出 pid，绝不替调用方挑。</summary>
+        public static bool AutoBind;
+
         /// <summary>--no-attach：只允许只读枚举（ROT / 进程探测），**绝不**调用
         /// GetActiveObject，也绝不 attach。brokerd 的健康探针用它，于是「探一次
         /// ROT」这条路径在设计上就不可能连上用户的窗口。</summary>
@@ -64,7 +76,8 @@ namespace SwMcp
             return Json.Dict(
                 "attachedPid", AttachedPid > 0 ? (object)AttachedPid : null,
                 "attachedBy", AttachedBy,
-                "expectedPid", ExpectedPid > 0 ? (object)ExpectedPid : null);
+                "expectedPid", ExpectedPid > 0 ? (object)ExpectedPid : null,
+                "bindMode", AutoBind ? (object)"auto" : (ExpectedPid > 0 ? (object)"pid" : (object)"unbound"));
         }
 
         // 每个进程只整理一次窗口：每次 Connect 都抢焦点会让并行建模抖动。
@@ -98,6 +111,7 @@ namespace SwMcp
                     Json.Dict("attachMode", "no-attach", "expectedPid", null, "attachedBy", null));
             }
             if (ExpectedPid != 0) AttachBound(ExpectedPid);
+            else if (AutoBind) AttachAuto();
             else AttachUnbound();
 
             LastKnownProcessId = AttachedPid;
@@ -140,6 +154,69 @@ namespace SwMcp
             }
             AttachActiveObject();
             WarnAllowedActiveObject(AttachedPid);
+        }
+
+        /// <summary>`--instance auto`：只有 ROT 里恰好一个实例时才绑定。
+        ///
+        /// 判定顺序是「先数再绑」而不是「先绑再看」：把候选集合缩小到唯一一个之后
+        /// 才碰 COM，于是「多实例时挑了一个」这种事故在设计上就不可能发生。
+        /// 0 个 → 沿用 Diagnostics 的 not-running 语义；≥2 个 → INSTANCE_AMBIGUOUS
+        /// 并带上 rotPids，让调用方自己点名。</summary>
+        void AttachAuto()
+        {
+            List<int> pids = Rot.Pids();
+            if (pids.Count == 0)
+            {
+                Diagnostics d = Diagnostics.Snapshot();
+                throw new BridgeError(d.State,
+                    d.Message + "（--instance auto：ROT 里没有任何 SOLIDWORKS 实例可绑定）",
+                    d.ToDict());
+            }
+            if (pids.Count > 1)
+            {
+                throw new BridgeError("INSTANCE_AMBIGUOUS",
+                    "this bridge was started with --instance auto, but " + pids.Count
+                    + " SOLIDWORKS instances are registered in the ROT (" + string.Join(", ", pids.ConvertAll(p => p.ToString()).ToArray())
+                    + "). \"auto\" only binds when the identity is unambiguous; refusing to pick one for you.",
+                    Json.Dict(
+                        "bindMode", "auto",
+                        "expectedPid", null,
+                        "rotPids", PidsAsObjects(pids),
+                        "hint", "start the bridge with --instance <pid> (see rotPids); "
+                            + "the MCP server resolves this pid automatically from the broker registry"));
+            }
+            AttachBound(pids[0]);
+            // AttachBound 已验证 GetProcessID() == pids[0]；这里只改「怎么绑上的」这一笔账。
+            MarkAttached(pids[0], "rot-unique");
+            WarnAutoBound(pids[0], pids);
+        }
+
+        /// <summary>auto 绑定的审计行：与 active-object 逃生阀同一套日志口径，
+        /// 让「凭什么认定是这个实例」在日志里是事实（ROT 唯一 + 复核过的 pid）。</summary>
+        void WarnAutoBound(int attachedPid, List<int> rotPids)
+        {
+            try
+            {
+                string dir = System.IO.Path.Combine(DataRoot(), "logs");
+                System.IO.Directory.CreateDirectory(dir);
+                string file = System.IO.Path.Combine(dir, "mcp-" + DateTime.Now.ToString("yyyyMMdd") + ".jsonl");
+                Dictionary<string, object> detail = Json.Dict(
+                    "ts", DateTime.UtcNow.ToString("o"),
+                    "level", "info",
+                    "tool", "bridge",
+                    "code", "ATTACHED_BY_ROT_UNIQUE",
+                    "message", "bound to the only SOLIDWORKS instance in the ROT (pid " + attachedPid + ")",
+                    "pid", System.Diagnostics.Process.GetCurrentProcess().Id,
+                    "expectedPid", 0,
+                    "attachedPid", attachedPid,
+                    "attachedBy", "rot-unique");
+                detail["rotPids"] = PidsAsObjects(rotPids);
+                System.IO.File.AppendAllText(file, Json.S(detail) + "\n", new UTF8Encoding(false));
+            }
+            catch
+            {
+                // 审计写不进去不能变成一次调用失败。
+            }
         }
 
         /// <summary>逃生阀开关。只有字面量 "1" 才算打开：'true'/'yes' 都不算，

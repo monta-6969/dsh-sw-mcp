@@ -233,7 +233,7 @@ export const TOOL_SPLITS = {
       core: true,
       title: '操作模型',
       description: DESCRIPTIONS.model,
-      actions: ['create', 'build', 'edit', 'plan', 'rebuild', 'undo', 'pattern', 'diff'],
+      actions: ['create', 'build', 'edit', 'plan', 'rebuild', 'undo', 'pattern', 'diff', 'helix', 'sweep', 'loft'],
     },
     {
       name: 'assembly',

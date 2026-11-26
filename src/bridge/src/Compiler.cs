@@ -28,6 +28,10 @@ namespace SwMcp
         readonly Dictionary<string, IDimension> _dimensionHandles = new Dictionary<string, IDimension>();
         readonly List<string> _notes = new List<string>();
         readonly Dictionary<string, IFeature> _sketches = new Dictionary<string, IFeature>();
+        // 螺旋线 / 扫掠 / 放样之后的特征：后续动作可以按 id 把它当作路径或引导线引用。
+        // 与 _sketches 分开是故意的 —— 它不是草图，塞进草图表会让一个后来的
+        // extrude 拿它当轮廓，然后在 SketchNotSelected 上失败，错误指向完全无关的地方。
+        readonly Dictionary<string, IFeature> _curves = new Dictionary<string, IFeature>();
         // Which reference plane each sketch was built on, by feature name: needed to
         // decide what "extrude towards +Y" means for that sketch.
         readonly Dictionary<string, int> _sketchPlanes = new Dictionary<string, int>();
@@ -620,7 +624,7 @@ namespace SwMcp
                         IFeature sketch = SketchForFeature(b, f, out parametric);
                         double angle = Json.Dbl(f, "angle", 360);
                         bool cut = Json.Bool(f, "cut", false);
-                        IFeature feat = b.RevolveSketch(sketch, angle, cut);
+                        IFeature feat = b.RevolveSketch(sketch, angle, cut, Json.Str(f, "axis", "centerline"));
 
                         string angleParam = BindNameOf(f, "angle");
                         if (angleParam != null && _params.ContainsKey(angleParam))
@@ -714,6 +718,130 @@ namespace SwMcp
                         built.Add(Describe(feat, kind, id, b));
                         break;
                     }
+                    case "helix":
+                    {
+                        // 螺旋线：底圆草图（d1/df）→ InsertHelix → 一条 3D 曲线特征。
+                        // 只有它才能让蜗杆的齿面是真螺旋面；「回转芯 + 偏心圆盘错位拉伸」
+                        // 那种近似在装配里穿模 9 mm，是这张工单的起点。
+                        bool parametric;
+                        IFeature baseSketch = SketchForFeature(b, f, out parametric);
+                        Sweeps sweeps = new Sweeps(_host, _doc);
+                        IFeature helix = sweeps.Helix(baseSketch,
+                            Json.Str(f, "definedBy", "heightAndPitch"),
+                            Json.Bool(f, "reversed", false),
+                            Json.Bool(f, "clockwise", false),
+                            Json.Bool(f, "tapered", false),
+                            Json.Bool(f, "outward", false),
+                            Resolve(f.ContainsKey("height") ? f["height"] : 0),
+                            Resolve(f.ContainsKey("pitch") ? f["pitch"] : 0),
+                            f.ContainsKey("revolutions") ? Resolve(f["revolutions"]) : 0,
+                            f.ContainsKey("taperAngle") ? Resolve(f["taperAngle"]) : 0,
+                            f.ContainsKey("startAngle") ? Resolve(f["startAngle"]) : 0);
+                        foreach (string note in sweeps.Steps) _notes.Add(note);
+                        Rename(helix, id);
+                        _curves[id] = helix;
+                        // 螺旋线的几何尺寸由 InsertHelix 的参数直接决定；本机没有可绑定的
+                        // 原生尺寸入口。bind 给了名字就必须说出来 —— 静默忽略正是本工单的缺陷。
+                        string helixBind = BindNameOf(f, "pitch");
+                        if (helixBind != null)
+                            _notes.Add("helix " + id + ": \"pitch\" is fixed by the feature parameters; "
+                                + "it is not bound to parameter \"" + helixBind + "\" (edit it with model action=edit "
+                                + "or rebuild the definition)");
+                        built.Add(Json.Dict(
+                            "id", id, "kind", kind,
+                            "featureName", helix == null ? null : helix.Name,
+                            "type", helix == null ? null : helix.GetTypeName2(),
+                            "parametric", false,
+                            "definedBy", Json.Str(f, "definedBy", "heightAndPitch"),
+                            "height", Resolve(f.ContainsKey("height") ? f["height"] : 0),
+                            "pitch", Resolve(f.ContainsKey("pitch") ? f["pitch"] : 0),
+                            "baseSketch", baseSketch == null ? null : baseSketch.Name));
+                        break;
+                    }
+                    case "sweep":
+                    case "sweptCut":
+                    {
+                        // 扫掠：轮廓（轴向平面）+ 路径（螺旋线或草图）+ 可选引导线。
+                        // kind 由动作名决定：sweep 缺省是凸台，sweptCut 一定是切除；
+                        // 显式 cut 参数优先于动作名（但两者矛盾时以显式参数为准并记 note）。
+                        bool parametric;
+                        IFeature profile = f.ContainsKey("profile") && f["profile"] != null
+                            ? SketchForFeature(b, f, out parametric) : null;
+                        bool cut = string.Equals(kind, "sweptCut", StringComparison.OrdinalIgnoreCase)
+                            || Json.Bool(f, "cut", false);
+                        IFeature path = CurveFeature(b, f.ContainsKey("path") ? f["path"] : null, "path");
+                        List<IFeature> guides = CurveFeatures(b, f.ContainsKey("guides") ? f["guides"] : null, "guides");
+                        Sweeps sweeps = new Sweeps(_host, _doc);
+                        double thickness = f.ContainsKey("thickness") ? Resolve(f["thickness"]) : 0;
+                        double thickness2 = f.ContainsKey("thickness2") ? Resolve(f["thickness2"]) : 0;
+                        IFeature feat = sweeps.Sweep(profile, path, guides,
+                            cut ? "cut" : "boss",
+                            Json.Bool(f, "thin", false), thickness, thickness2,
+                            Json.Str(f, "thinType", "oneDirection"),
+                            Json.Bool(f, "reverseThickness", false),
+                            Json.Bool(f, "propagate", true),
+                            Json.Bool(f, "alignment", true),
+                            Json.Str(f, "twistControl", "followPath"),
+                            f.ContainsKey("twist") ? Resolve(f["twist"]) : 0,
+                            Json.Str(f, "startMatch", "none"),
+                            Json.Str(f, "endMatch", "none"),
+                            Json.Bool(f, "advancedSmoothing", true),
+                            Json.Bool(f, "merge", true),
+                            Json.Bool(f, "circularProfile", false),
+                            f.ContainsKey("circularDiameter") ? Resolve(f["circularDiameter"]) : 0,
+                            Json.Bool(f, "reverseDirection", false));
+                        foreach (string note in sweeps.Steps) _notes.Add(note);
+                        Rename(feat, id);
+                        _curves[id] = feat;
+                        built.Add(Json.Dict(
+                            "id", id, "kind", kind,
+                            "featureName", feat == null ? null : feat.Name,
+                            "type", feat == null ? null : feat.GetTypeName2(),
+                            "parametric", false,
+                            "cut", cut,
+                            "profile", profile == null ? null : profile.Name,
+                            "path", path == null ? null : path.Name,
+                            "thin", Json.Bool(f, "thin", false),
+                            "twistControl", Json.Str(f, "twistControl", "followPath")));
+                        break;
+                    }
+                    case "loft":
+                    case "loftedCut":
+                    {
+                        // 放样：两段以上截面（大端/小端渐开线）+ 可选引导线。
+                        // 直齿锥齿轮的背锥展开渐开线就是靠这个从「圆锥台近似」变成真齿面。
+                        List<IFeature> sections = CurveFeatures(b, f.ContainsKey("sections") ? f["sections"] : null, "sections");
+                        if (sections.Count == 0 && f.ContainsKey("profile"))
+                        {
+                            bool profileParametric;
+                            sections.Add(SketchForFeature(b, f, out profileParametric));
+                        }
+                        List<IFeature> guides = CurveFeatures(b, f.ContainsKey("guides") ? f["guides"] : null, "guides");
+                        Sweeps sweeps = new Sweeps(_host, _doc);
+                        string mode = string.Equals(kind, "loftedCut", StringComparison.OrdinalIgnoreCase)
+                            ? "cut" : Json.Str(f, "mode", "boss");
+                        IFeature feat = sweeps.Loft(sections, mode, guides,
+                            Json.Bool(f, "closed", false), Json.Bool(f, "keepTangency", false),
+                            Json.Bool(f, "thin", false),
+                            f.ContainsKey("thickness") ? Resolve(f["thickness"]) : 0,
+                            f.ContainsKey("thickness2") ? Resolve(f["thickness2"]) : 0,
+                            Json.Str(f, "thinType", "oneDirection"),
+                            Json.Bool(f, "merge", true),
+                            Json.Bool(f, "advancedSmoothing", true),
+                            Json.Int(f, "startMatch", 0), Json.Int(f, "endMatch", 0),
+                            Json.Dbl(f, "tessTolerance", 1));
+                        foreach (string note in sweeps.Steps) _notes.Add(note);
+                        Rename(feat, id);
+                        _sketches[id] = feat;
+                        built.Add(Json.Dict(
+                            "id", id, "kind", kind,
+                            "featureName", feat == null ? null : feat.Name,
+                            "type", feat == null ? null : feat.GetTypeName2(),
+                            "parametric", false,
+                            "mode", mode,
+                            "sections", sections.Count));
+                        break;
+                    }
                     case "slot":
                     {
                         _notes.Add("slot feature is registered as a capability but is not wired into the compiler yet");
@@ -721,6 +849,15 @@ namespace SwMcp
                             "the \"slot\" feature kind is declared in the capability registry but has no "
                             + "adapter yet; use \"holes\" with a slot-shaped centre list or omit it");
                     }
+                    default:
+                        // 未知 kind 曾经在这里无声跳过：整个 features 数组照建不误，回包 ok，
+                        // 少掉的那一步只体现在体积上。蜗杆的 helix/sweep 就因此"建成"了一个
+                        // 光圆柱（6031.86 mm³ = π·8²·30，一个齿都没切）。未知就报错。
+                        throw new BridgeError("UNSUPPORTED_FEATURE_KIND",
+                            "feature kind \"" + kind + "\" is not implemented by this bridge; it was "
+                            + "rejected instead of being skipped, because a skipped feature still "
+                            + "reports ok and only shows up as missing material.",
+                            Json.Dict("featureId", id, "kind", kind, "featureIndex", index));
                 }
             }
         }
@@ -909,6 +1046,48 @@ namespace SwMcp
                 throw new BridgeError("BAD_ARGUMENT",
                     "\"profile\" must be a sketch id or a profile object");
             return SketchFromSpec(b, spec, Json.Str(f, "id", "inline"), out parametric);
+        }
+
+        /// <summary>解析「曲线引用」：螺旋线/扫掠/放样记在 _curves，草图记在 _sketches。
+        /// 传对象则当成内联 profile 现场建一张草图（路径也可以是一条草图曲线）。
+        /// 找不到就报错并说清楚「它必须出现在 features 更前面」—— 静默返回 null 会让
+        /// 后面的扫掠失败在一句与原因无关的话上。</summary>
+        IFeature CurveFeature(Builder b, object raw, string what)
+        {
+            if (raw == null) return null;
+            string id = raw as string;
+            if (id != null)
+            {
+                IFeature feature;
+                if (_curves.TryGetValue(id, out feature) && feature != null) return feature;
+                if (_sketches.TryGetValue(id, out feature) && feature != null) return feature;
+                throw new BridgeError("CURVE_NOT_FOUND",
+                    what + " \"" + id + "\" is not a sketch or curve built before this feature; "
+                    + "the sketch/helix/loft it refers to has to appear earlier in \"features\"");
+            }
+            Dictionary<string, object> spec = Json.Obj(raw);
+            if (spec == null)
+                throw new BridgeError("BAD_ARGUMENT", what + " must be a feature id or a profile object");
+            bool parametric;
+            return SketchFromSpec(b, spec, what, out parametric);
+        }
+
+        List<IFeature> CurveFeatures(Builder b, object raw, string what)
+        {
+            List<IFeature> list = new List<IFeature>();
+            string single = raw as string;
+            if (single != null)
+            {
+                IFeature one = CurveFeature(b, single, what);
+                if (one != null) list.Add(one);
+                return list;
+            }
+            foreach (object item in Json.Items(raw))
+            {
+                IFeature feature = CurveFeature(b, item, what);
+                if (feature != null) list.Add(feature);
+            }
+            return list;
         }
 
         /// <summary>Reads f.bind.depth / f.bind.angle so a feature parameter can be

@@ -455,7 +455,7 @@ export function registerObserveTools(server, z, deps) {
             + 'file=文件字节与哈希，geometry=体积/实体数，dimensions=包围盒与各孔径数量，positions=孔心/孔距，'
             + 'topology=单实体与开口边，assembly=组件数与干涉（零件会标 skipped）'),
         measure: z
-          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes']) })
+          .object({ kind: z.enum(['faces', 'cylinders', 'holes', 'axis', 'spacing', 'distance', 'planes', 'helix']) })
           .passthrough()
           .optional()
           .describe('measure 动作要测什么（kind 见 schema；holes 列孔，axis 取轴线位置与高度，spacing 取两孔轴线距离，distance 取点到面/面的距离）'),

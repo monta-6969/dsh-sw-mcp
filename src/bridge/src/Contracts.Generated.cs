@@ -141,6 +141,16 @@ namespace SwMcp
             public const string CONTRACTINVALID = "CONTRACT_INVALID";
             public const string EXPORTDEGENERATE = "EXPORT_DEGENERATE";
             public const string DEPRECATEDARG = "DEPRECATED_ARG";
+            public const string UNSUPPORTEDPARAM = "UNSUPPORTED_PARAM";
+            public const string UNSUPPORTEDFEATUREKIND = "UNSUPPORTED_FEATURE_KIND";
+            public const string INSTANCEAMBIGUOUS = "INSTANCE_AMBIGUOUS";
+            public const string AXISCREATEFAILED = "AXIS_CREATE_FAILED";
+            public const string HELIXFAILED = "HELIX_FAILED";
+            public const string SWEEPFAILED = "SWEEP_FAILED";
+            public const string SWEEPNOMATERIALREMOVED = "SWEEP_NO_MATERIAL_REMOVED";
+            public const string LOFTFAILED = "LOFT_FAILED";
+            public const string NOHELICALEDGE = "NO_HELICAL_EDGE";
+            public const string CURVENOTFOUND = "CURVE_NOT_FOUND";
         }
 
         public static class Event
