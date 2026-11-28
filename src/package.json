@@ -1,7 +1,6 @@
 {
   "name": "dsh-sw-preset",
   "version": "0.6.0",
-  "private": true,
   "description": "SOLIDWORKS 自动化预设（两个）：sw建模自动化 管零件与图纸，sw装配体自动化 管装配与配合。一次工具调用只做一个动作，同类几何可在一次调用里用数组批量给；workspace preflight、plan/build/edit、装配与配合、inspect/qa 验收、交付前程序化检查；能力目录、跨进程写锁、四态验收与图纸证据校验；附带交付件的 3D 预览与面/边/点拾取面板。",
   "type": "module",
   "license": "MIT",
