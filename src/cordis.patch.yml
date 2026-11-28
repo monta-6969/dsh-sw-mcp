@@ -90,16 +90,16 @@
           - id: tool-ask-user
             name: '@deepseek-ai/dsh-tool-ask-user'
           - id: prompt-surface
-            name: '@local/dsh-sw-preset/preset/prompt-surface.js'
+            name: 'dsh-sw-preset/preset/prompt-surface.js'
             config:
               preset: sw-native
           - id: restrict-tools
-            name: '@local/dsh-sw-preset/preset/restrict-tools.js'
+            name: 'dsh-sw-preset/preset/restrict-tools.js'
             config:
               preset: sw-native
           # 只加一个引用、不加 config 之外的开关：它按 sessionId→预设判定，未命中不加头。
           - id: bili-bypass
-            name: '@local/dsh-sw-preset/preset/bili-bypass.js'
+            name: 'dsh-sw-preset/preset/bili-bypass.js'
             config:
               preset: sw-native
           - id: command-goal
@@ -107,11 +107,11 @@
           - id: tool-goal
             name: '@deepseek-ai/dsh-tool-goal'
           - id: experience-nudge
-            name: '@local/dsh-sw-preset/preset/experience-nudge.js'
+            name: 'dsh-sw-preset/preset/experience-nudge.js'
           - id: experience-digest
-            name: '@local/dsh-sw-preset/preset/experience-digest.js'
+            name: 'dsh-sw-preset/preset/experience-digest.js'
           - id: review-gate
-            name: '@local/dsh-sw-preset/preset/review-gate.js'
+            name: 'dsh-sw-preset/preset/review-gate.js'
           - id: compaction
             name: cordis:group
             group: true
@@ -193,15 +193,15 @@
           - id: tool-ask-user
             name: '@deepseek-ai/dsh-tool-ask-user'
           - id: prompt-surface
-            name: '@local/dsh-sw-preset/preset/prompt-surface.js'
+            name: 'dsh-sw-preset/preset/prompt-surface.js'
             config:
               preset: sw-assembly
           - id: restrict-tools
-            name: '@local/dsh-sw-preset/preset/restrict-tools.js'
+            name: 'dsh-sw-preset/preset/restrict-tools.js'
             config:
               preset: sw-assembly
           - id: bili-bypass
-            name: '@local/dsh-sw-preset/preset/bili-bypass.js'
+            name: 'dsh-sw-preset/preset/bili-bypass.js'
             config:
               preset: sw-assembly
           - id: command-goal
@@ -209,11 +209,11 @@
           - id: tool-goal
             name: '@deepseek-ai/dsh-tool-goal'
           - id: experience-nudge
-            name: '@local/dsh-sw-preset/preset/experience-nudge.js'
+            name: 'dsh-sw-preset/preset/experience-nudge.js'
           - id: experience-digest
-            name: '@local/dsh-sw-preset/preset/experience-digest.js'
+            name: 'dsh-sw-preset/preset/experience-digest.js'
           - id: review-gate
-            name: '@local/dsh-sw-preset/preset/review-gate.js'
+            name: 'dsh-sw-preset/preset/review-gate.js'
           - id: compaction
             name: cordis:group
             group: true
@@ -235,7 +235,7 @@
 # 只填在本机 profile 的 patch 层，不要提交到仓库。
 - insert:
     - id: sw-3d-preview
-      name: '@local/dsh-sw-preset/preview/index.js'
+      name: 'dsh-sw-preset/preview/index.js'
       config:
         extToken: ''
         extTokenScopes: ['read']

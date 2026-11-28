@@ -212,7 +212,7 @@ const patchText = readFileSync(join(repoRoot, 'cordis.patch.yml'), 'utf8')
 const unregistered = Object.keys(pluginFiles).filter((file) => !patchText.includes(file))
 check('三个本地插件都登记进了预设', unregistered.length === 0, { unregistered })
 
-// 登记进预设还不够：它们是以 package 子路径引用的（@local/dsh-sw-preset/xxx.js），
+// 登记进预设还不够：它们是以 package 子路径引用的（dsh-sw-preset/xxx.js），
 // package.json 的 exports 里没有这一条，整个预设会在启动时解析失败 —— 而不是某个插件失效。
 const pkg = JSON.parse(readFileSync(join(repoRoot, 'package.json'), 'utf8'))
 const badExports = Object.keys(pluginFiles)

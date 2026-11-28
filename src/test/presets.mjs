@@ -83,9 +83,9 @@ check('清单里不再有 sw-ptc 的 config.id', !/^\s{8}id:\s*sw-ptc\s*$/m.test
 check('没有验收子代理预设', !byRow['preset-sw-review'], Object.keys(byRow))
 
 // 插件文件必须真实存在（本地 link 包的路径写错时，mount 才会报错，太晚）
-const localPlugins = presets.flatMap((p) => p.plugins).filter((name) => name.startsWith('@local/dsh-sw-preset/'))
+const localPlugins = presets.flatMap((p) => p.plugins).filter((name) => name.startsWith('dsh-sw-preset/'))
 check('每个本地插件都指向存在的文件',
-  localPlugins.length > 0 && localPlugins.every((name) => existsSync(join(repo, name.slice('@local/dsh-sw-preset/'.length)))),
+  localPlugins.length > 0 && localPlugins.every((name) => existsSync(join(repo, name.slice('dsh-sw-preset/'.length)))),
   localPlugins)
 
 check('两个预设的插件行数一致', model?.plugins.length > 0 && model?.plugins.length === assembly?.plugins.length,

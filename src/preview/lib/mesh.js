@@ -78,7 +78,7 @@ export const DEFAULT_CREASE_ANGLE_DEG = 35.0;
 // 跨机原则：**源码里不写任何一台机器的绝对路径**。所有 venv 候选都由这四种可移植来源推导：
 //   ① 环境变量 SW_3D_PREVIEW_PYTHON（显式指定，优先级最高）
 //   ② sw-mcp 的数据根（SW_MCP_DATA → %LOCALAPPDATA%\sw-mcp）下的 .venv
-//   ③ DSH profile 的 package.json 里以 link:/file: 指向的 sw-mcp 仓库（预设 @local/dsh-sw-preset）下的 .venv
+//   ③ DSH profile 的 package.json 里以 link:/file: 指向的 sw-mcp 仓库（预设 dsh-sw-preset）下的 .venv
 //   ④ 插件目录同级的 sw-mcp\\.venv（有人把插件与 sw-mcp 平级放）
 // 最后再退回启动器与 PATH：py -3 → python → python3。
 // 每条候选即使失败也会在 probePython() 的 error 里留下可读原因。
@@ -208,7 +208,7 @@ function dshProfileDirs(options) {
 
 /**
  * 从 DSH profile 的 package.json 反推 sw-mcp 仓库根（只读，失败就返回空数组）。
- * profile 里 sw-mcp 预设是 `"@local/dsh-sw-preset": "link:D:/…/sw-mcp"` 这种写法，
+ * profile 里 sw-mcp 预设是 `"dsh-sw-preset": "link:D:/…/sw-mcp"` 这种写法，
  * 所以把 link:/file: 依赖指向的目录里「有 .venv」的挑出来即可 —— 不依赖某个固定盘符。
  *
  * @param {object} [options] 可测试性注入口：{ env, homedir }；缺省取真实进程环境。
